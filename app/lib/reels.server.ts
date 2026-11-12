@@ -243,68 +243,43 @@ export async function saveSelection(
   processPending(shop);
 }
 
-// ---------- Automatic mode: pinned reels first, then the newest ones ----------
+// ---------- The newest reels, kept up to date automatically ----------
 
-export type Settings = { mode: "auto" | "manual"; count: number; pins: string[]; lastSync: Date | null };
-
-export async function getSettings(shop: string): Promise<Settings> {
-  const s = await db.reelSettings.findUnique({ where: { shop } });
-  return {
-    mode: s?.mode === "manual" ? "manual" : "auto",
-    count: Math.min(MAX_REELS, Math.max(1, s?.count ?? AUTO_COUNT)),
-    pins: s?.pins ?? [],
-    lastSync: s?.lastSync ?? null,
-  };
-}
-
-export async function updateSettings(shop: string, data: Partial<Omit<Settings, "lastSync">> & { lastSync?: Date | null }) {
-  await db.reelSettings.upsert({ where: { shop }, create: { shop, ...data }, update: data });
-}
-
-/**
- * The reels automatic mode shows, in order:
- * reels pinned on Instagram, then reels pinned in ReelStage, then the newest reels, up to `count`.
- */
-export function autoPick(reels: Reel[], s: Pick<Settings, "count" | "pins">) {
-  const byId = new Map(reels.map((r) => [r.id, r]));
-  const out: (Reel & { pinned: boolean })[] = [];
-  const seen = new Set<string>();
-  const add = (r: Reel | undefined, pinned: boolean) => {
-    if (!r || seen.has(r.id) || out.length >= s.count) return;
-    seen.add(r.id);
-    out.push({ ...r, pinned });
-  };
-  reels.filter((r) => r.pinned).forEach((r) => add(r, true));
-  s.pins.forEach((id) => add(byId.get(id), true));
-  [...reels]
+/** The store's newest reels, newest first (pinned posts are not treated specially: Meta's API doesn't say which are pinned). */
+export function newest(reels: Reel[], count = AUTO_COUNT) {
+  return [...reels]
     .sort((a, b) => Date.parse(b.timestamp || "0") - Date.parse(a.timestamp || "0"))
-    .forEach((r) => add(r, false));
-  return out;
+    .slice(0, count)
+    .map((r) => ({ ...r, pinned: false }));
 }
 
-/** Brings the store up to date in automatic mode (new reels in, old ones out). Returns true if anything changed. */
+/** Brings the store up to date (new reels in, old ones out). Returns true if anything changed. */
 export async function syncAuto(admin: Admin, shop: string, reels?: Reel[]) {
-  const s = await getSettings(shop);
-  if (s.mode !== "auto") return false;
-  const list = reels ?? (await listReels(shop));
-  const pick = autoPick(list, s);
+  const list = reels ?? (await listReels(shop, AUTO_COUNT));
+  const pick = newest(list);
   const current = await db.selectedReel.findMany({ where: { shop }, orderBy: { position: "asc" } });
-  const same =
-    current.length === pick.length && current.every((c, i) => c.mediaId === pick[i].id && c.pinned === pick[i].pinned);
-  await updateSettings(shop, { lastSync: new Date() });
+  const same = current.length === pick.length && current.every((c, i) => c.mediaId === pick[i].id && !c.pinned);
+  await db.reelSettings.upsert({
+    where: { shop },
+    create: { shop, mode: "auto", count: AUTO_COUNT, lastSync: new Date() },
+    update: { mode: "auto", count: AUTO_COUNT, pins: [], lastSync: new Date() },
+  });
   if (same) return false;
   await saveSelection(admin, shop, pick);
   return true;
 }
 
-/** Checks every store in automatic mode for new reels every few hours (while the server is awake). */
+async function lastSync(shop: string) {
+  return (await db.reelSettings.findUnique({ where: { shop } }))?.lastSync ?? null;
+}
+
+/** Checks every store for new reels every few hours (while the server is awake). */
 async function syncAllStores() {
   const accounts = await db.instagramAccount.findMany({ select: { shop: true } });
   for (const { shop } of accounts) {
     try {
-      const s = await getSettings(shop);
-      if (s.mode !== "auto") continue;
-      if (s.lastSync && Date.now() - s.lastSync.getTime() < 2 * 3600 * 1000) continue;
+      const last = await lastSync(shop);
+      if (last && Date.now() - last.getTime() < 2 * 3600 * 1000) continue;
       const { admin } = await unauthenticated.admin(shop);
       await syncAuto(admin as unknown as Admin, shop);
     } catch (e) {

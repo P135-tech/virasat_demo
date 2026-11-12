@@ -2,7 +2,6 @@
   assign reels = app.metafields.reels.selected.value
   assign profile = app.metafields.reels.profile.value
   assign handle = profile.u
-  assign limit = block.settings.max_reels | default: 10
   assign uid = block.id
   assign follow_link = block.settings.button_link
   if follow_link == blank and handle != blank
@@ -47,7 +46,7 @@
     {%- if reels and reels.size > 0 -%}
       <div class="vr__stage" aria-roledescription="carousel" aria-label="{{ block.settings.heading | default: 'Video reels' | escape }}">
         {%- assign n = 0 -%}
-        {%- for r in reels limit: limit -%}
+        {%- for r in reels limit: 20 -%}
           {%- if r.v == blank -%}{%- continue -%}{%- endif -%}
           <div class="vr__card" data-i="{{ n }}" role="group" aria-roledescription="slide" aria-label="{{ n | plus: 1 }} / {{ reels.size }}">
             <div class="vr__frame">
@@ -154,7 +153,6 @@
     { "type": "text", "id": "heading", "label": "Heading", "default": "Watch our reels" },
     { "type": "richtext", "id": "subheading", "label": "Text under heading" },
     { "type": "header", "content": "Reels" },
-    { "type": "range", "id": "max_reels", "label": "Reels to show (most)", "min": 3, "max": 20, "step": 1, "default": 10 },
     { "type": "range", "id": "preview_seconds", "label": "Preview length before moving on", "min": 2, "max": 8, "step": 1, "unit": "s", "default": 4 },
     { "type": "checkbox", "id": "auto_advance", "label": "Move to the next reel automatically", "default": true },
     { "type": "checkbox", "id": "show_caption", "label": "Show caption", "default": true },
