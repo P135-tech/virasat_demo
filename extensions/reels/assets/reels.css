@@ -1,86 +1,192 @@
-/* ReelStage – centre-stage carousel */
-.vr { background: var(--vr-bg); padding: var(--vr-pad) 0; overflow: hidden; }
-.vr__inner { max-width: 1440px; margin: 0 auto; padding: 0 clamp(16px, 3vw, 40px); }
-.vr__head { margin: 0 0 28px; text-align: center; }
-.vr__eyebrow { margin: 0 0 6px; color: var(--vr-accent); font-size: 12px; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; }
-.vr__title { margin: 0; color: var(--vr-heading); }
-.vr__sub { margin: 10px auto 0; max-width: 640px; color: var(--vr-text); }
-
-/* stage: every card sits in the middle; JS moves each one left/right by its distance from the active reel */
-.vr__stage {
-  position: relative; height: calc(var(--vr-card) * 16 / 9); margin: 0 auto;
-  touch-action: pan-y;
+/* ReelStage – centre-stage reels carousel */
+.vr {
+  --vr-ig: conic-gradient(from 0deg, #feda75, #fa7e1e, #d62976, #962fbf, #4f5bd5, #962fbf, #d62976, #fa7e1e, #feda75);
+  --vr-ig-line: linear-gradient(90deg, #fa7e1e, #d62976 45%, #962fbf 75%, #4f5bd5);
+  --vr-heading: #141414;
+  --vr-text: #5a5a5a;
+  --vr-glass: rgba(255, 255, 255, .78);
+  --vr-glass-fg: #141414;
+  position: relative; padding: var(--vr-pad) 0; overflow: hidden; background: var(--vr-bg, transparent);
 }
+.vr--glow { --vr-bg: linear-gradient(180deg, #fffaf6 0%, #fdf3f7 100%); }
+.vr--dark {
+  --vr-bg: radial-gradient(120% 90% at 50% 0%, #1d1626 0%, #0c0b10 70%);
+  --vr-heading: #ffffff; --vr-text: #b9b6c3;
+  --vr-glass: rgba(255, 255, 255, .12); --vr-glass-fg: #ffffff;
+}
+.vr__inner { position: relative; max-width: 1440px; margin: 0 auto; padding: 0 clamp(16px, 3vw, 40px); }
+
+/* ---------- heading ---------- */
+.vr__head { margin: 0 auto 34px; max-width: 720px; text-align: center; }
+.vr__head:empty { display: none; }
+.vr__eyebrow {
+  display: inline-flex; align-items: center; gap: 8px; margin: 0 0 14px; padding: 6px 14px 6px 6px;
+  border-radius: 999px; background: var(--vr-glass); color: var(--vr-heading);
+  font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+  box-shadow: 0 4px 16px rgba(150, 47, 191, .14); backdrop-filter: blur(8px);
+}
+.vr__eyebrow-icon { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--vr-ig-line); color: #fff; }
+.vr__title { margin: 0; color: var(--vr-heading); font-size: clamp(28px, 3.6vw, 46px); line-height: 1.1; letter-spacing: -.01em; }
+.vr__sub { margin: 12px auto 0; color: var(--vr-text); font-size: 16px; }
+.vr__sub p { margin: 0; }
+
+/* ---------- stage ---------- */
+.vr__stage { position: relative; height: calc(var(--vr-card) * 16 / 9 + 8px); margin: 0 auto; perspective: 1600px; touch-action: pan-y; }
+/* coloured glow behind the centre reel */
+.vr--glow .vr__stage::before, .vr--dark .vr__stage::before {
+  content: ""; position: absolute; left: 50%; top: 50%; width: calc(var(--vr-card) * 2.2); height: calc(var(--vr-card) * 1.3);
+  transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none;
+  background: radial-gradient(closest-side, rgba(214, 41, 118, .28), rgba(150, 47, 191, .16) 55%, transparent);
+  filter: blur(30px);
+}
+.vr--dark .vr__stage::before { background: radial-gradient(closest-side, rgba(214, 41, 118, .45), rgba(79, 91, 213, .25) 55%, transparent); }
+
 .vr__card {
-  --x: 0px; --s: 1; --o: 1;
+  --x: 0px; --s: 1; --o: 1; --r: 0deg;
   position: absolute; top: 0; left: 50%; width: var(--vr-card); aspect-ratio: 9 / 16; margin-left: calc(var(--vr-card) / -2);
-  overflow: hidden; border-radius: var(--vr-radius); background: #111;
-  box-shadow: 0 10px 28px rgba(0,0,0,.16);
-  transform: translateX(var(--x)) scale(var(--s)); opacity: var(--o);
-  transition: transform .55s cubic-bezier(.22,.7,.2,1), opacity .45s ease, box-shadow .45s ease;
+  padding: 4px; overflow: hidden; border-radius: calc(var(--vr-radius) + 4px);
+  transform: translateX(var(--x)) scale(var(--s)) rotateY(var(--r)); opacity: var(--o);
+  transition: transform .7s cubic-bezier(.2, .75, .2, 1), opacity .5s ease, filter .5s ease;
   will-change: transform;
 }
-.vr__card.is-active { box-shadow: 0 18px 44px rgba(0,0,0,.28); }
+/* moving gradient ring on the centre reel */
+.vr__card::before {
+  content: ""; position: absolute; inset: -60%; background: var(--vr-ig); opacity: 0; transition: opacity .4s;
+  animation: vr-spin 5s linear infinite; animation-play-state: paused;
+}
+.vr--ring-accent .vr__card::before { background: var(--vr-accent); }
+.vr--ring-none .vr__card::before { display: none; }
+.vr__card.is-active::before { opacity: 1; animation-play-state: running; }
+@keyframes vr-spin { to { transform: rotate(1turn); } }
+
+.vr__frame {
+  position: relative; height: 100%; overflow: hidden; border-radius: var(--vr-radius); background: #111;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .18);
+}
+.vr__card.is-active .vr__frame { box-shadow: 0 24px 60px rgba(60, 10, 60, .35); }
 .vr__card.is-hidden { pointer-events: none; }
 .vr__video { width: 100%; height: 100%; object-fit: cover; display: block; }
-.vr__shade { position: absolute; inset: 0; background: rgba(255,255,255,.35); transition: opacity .45s; pointer-events: none; }
+.vr__shade { position: absolute; inset: 0; z-index: 1; background: rgba(10, 8, 14, .42); transition: opacity .5s; pointer-events: none; }
 .vr__card.is-active .vr__shade { opacity: 0; }
+.vr.is-watching .vr__card:not(.is-active) .vr__shade { background: rgba(10, 8, 14, .7); }
 
 /* side reels are one big button that brings them to the centre */
-.vr__pick { position: absolute; inset: 0; z-index: 3; width: 100%; height: 100%; padding: 0; border: 0; background: none; cursor: pointer; }
+.vr__pick { position: absolute; inset: 0; z-index: 6; width: 100%; height: 100%; padding: 0; border: 0; background: none; cursor: pointer; }
 .vr__card.is-active .vr__pick { display: none; }
-.vr__pick:focus-visible { outline: 3px solid var(--vr-accent); outline-offset: -3px; border-radius: var(--vr-radius); }
+.vr__pick:focus-visible { outline: 3px solid #fff; outline-offset: -6px; border-radius: var(--vr-radius); }
 
-/* progress bar + controls on the centre reel */
-.vr__bar, .vr__controls, .vr__ig, .vr__caption { opacity: 0; transition: opacity .3s; }
-.vr__card.is-active .vr__bar, .vr__card.is-active .vr__controls, .vr__card.is-active .vr__ig, .vr__card.is-active .vr__caption { opacity: 1; }
-.vr__bar { position: absolute; left: 12px; right: 12px; top: 12px; z-index: 4; }
-.vr__progress { display: block; height: 3px; overflow: hidden; border-radius: 3px; background: rgba(255,255,255,.35); }
-.vr__progress span { display: block; width: 0; height: 100%; background: #fff; }
-.vr__controls { position: absolute; left: 12px; bottom: 12px; z-index: 4; display: flex; gap: 8px; }
-.vr__ctrl, .vr__ig {
-  display: grid; place-items: center; width: 38px; height: 38px; padding: 0; border: 0; border-radius: 50%;
-  background: rgba(0,0,0,.45); color: #fff; cursor: pointer; backdrop-filter: blur(4px); transition: background .2s;
+/* ---------- on the centre reel ---------- */
+.vr__top, .vr__caption, .vr__big, .vr__controls { opacity: 0; visibility: hidden; transition: opacity .3s, visibility .3s; }
+.vr__card.is-active .vr__top, .vr__card.is-active .vr__caption, .vr__card.is-active .vr__big { opacity: 1; visibility: visible; }
+.vr__card.is-full .vr__big { opacity: 0; visibility: hidden; }
+.vr__card.is-full .vr__controls { opacity: 1; visibility: visible; }
+
+.vr__top { position: absolute; left: 12px; right: 12px; top: 12px; z-index: 4; display: grid; gap: 10px; pointer-events: none; }
+.vr__progress { display: block; height: 3px; overflow: hidden; border-radius: 3px; background: rgba(255, 255, 255, .35); }
+.vr__progress span { display: block; width: 0; height: 100%; border-radius: 3px; background: #fff; }
+.vr__chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.vr__chip {
+  display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; border-radius: 999px;
+  font-size: 11px; font-weight: 700; letter-spacing: .04em; color: #fff; line-height: 1.2;
+  background: rgba(0, 0, 0, .38); backdrop-filter: blur(6px);
 }
-.vr__ctrl:hover, .vr__ig:hover { background: rgba(0,0,0,.7); }
-.vr__ctrl:focus-visible, .vr__ig:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
-.vr__ig { position: absolute; right: 12px; bottom: 12px; z-index: 4; text-decoration: none; }
+.vr__chip--pin { background: var(--vr-ig-line); }
+.vr__card.is-full .vr__chip--preview { display: none; }
+
+.vr__big {
+  position: absolute; left: 50%; top: 50%; z-index: 5; display: grid; justify-items: center; gap: 10px; padding: 0;
+  border: 0; background: none; color: #fff; cursor: pointer; transform: translate(-50%, -50%);
+}
+.vr__big-circle {
+  position: relative; display: grid; place-items: center; width: 72px; height: 72px; border-radius: 50%;
+  background: rgba(255, 255, 255, .22); border: 1.5px solid rgba(255, 255, 255, .6); backdrop-filter: blur(10px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, .25); transition: transform .25s, background .25s;
+}
+.vr__big-circle svg { margin-left: 4px; }
+.vr__big-circle::after {
+  content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .55);
+  animation: vr-pulse 2s ease-out infinite;
+}
+@keyframes vr-pulse { from { transform: scale(.9); opacity: 1; } to { transform: scale(1.35); opacity: 0; } }
+.vr__big:hover .vr__big-circle { transform: scale(1.08); background: rgba(255, 255, 255, .32); }
+.vr__big:focus-visible .vr__big-circle { outline: 3px solid #fff; outline-offset: 4px; }
+.vr__big-label {
+  padding: 5px 12px; border-radius: 999px; background: rgba(0, 0, 0, .4); backdrop-filter: blur(6px);
+  font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap;
+}
+
+.vr__caption {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; margin: 0; padding: 70px 16px 18px; color: #fff;
+  font-size: 13.5px; line-height: 1.45; background: linear-gradient(to top, rgba(0, 0, 0, .78), rgba(0, 0, 0, 0)); pointer-events: none;
+}
+.vr__caption span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.vr__card.is-full .vr__caption { padding-bottom: 68px; }
+
+.vr__controls { position: absolute; left: 12px; right: 12px; bottom: 12px; z-index: 5; display: flex; gap: 8px; }
+.vr__ctrl {
+  display: grid; place-items: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%;
+  background: rgba(0, 0, 0, .45); color: #fff; cursor: pointer; backdrop-filter: blur(6px); transition: background .2s, transform .2s;
+  text-decoration: none;
+}
+.vr__ctrl:hover { background: rgba(0, 0, 0, .72); transform: scale(1.06); }
+.vr__ctrl:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.vr__ctrl--close { margin-left: auto; }
 .vr__ctrl .i-play, .vr__ctrl .i-sound { display: none; }
 .vr__card.is-paused .vr__ctrl--play .i-pause { display: none; }
 .vr__card.is-paused .vr__ctrl--play .i-play { display: block; }
 .vr__card.is-sound .vr__ctrl--sound .i-muted { display: none; }
 .vr__card.is-sound .vr__ctrl--sound .i-sound { display: block; }
-.vr__caption {
-  position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; margin: 0; padding: 48px 14px 60px; color: #fff;
-  font-size: 13px; line-height: 1.4; background: linear-gradient(to top, rgba(0,0,0,.7), rgba(0,0,0,0));
-  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; pointer-events: none;
-}
 
+/* ---------- arrows, dots, button ---------- */
 .vr__nav {
-  position: absolute; top: 50%; z-index: 30; display: grid; place-items: center; width: 46px; height: 46px; padding: 0;
-  border: 0; border-radius: 50%; background: #fff; color: var(--vr-accent); cursor: pointer;
-  box-shadow: 0 6px 18px rgba(0,0,0,.18); transform: translateY(-50%); transition: background .2s, color .2s;
+  position: absolute; top: 50%; z-index: 30; display: grid; place-items: center; width: 50px; height: 50px; padding: 0;
+  border: 0; border-radius: 50%; background: var(--vr-glass); color: var(--vr-glass-fg); cursor: pointer;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .18); backdrop-filter: blur(10px);
+  transform: translateY(-50%); transition: background .2s, color .2s, transform .2s;
 }
-.vr__nav:hover { background: var(--vr-accent); color: #fff; }
-.vr__nav--prev { left: calc(50% - var(--vr-card) / 2 - 23px); }
-.vr__nav--next { right: calc(50% - var(--vr-card) / 2 - 23px); }
+.vr__nav:hover { background: var(--vr-accent); color: #fff; transform: translateY(-50%) scale(1.06); }
+.vr__nav:focus-visible { outline: 3px solid var(--vr-accent); outline-offset: 3px; }
+.vr__nav--prev { left: calc(50% - var(--vr-card) / 2 - 25px); }
+.vr__nav--next { right: calc(50% - var(--vr-card) / 2 - 25px); }
 
-.vr__dots { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 22px; }
-.vr__dot { width: 8px; height: 8px; padding: 0; border: 0; border-radius: 8px; background: color-mix(in srgb, var(--vr-accent) 25%, transparent); cursor: pointer; transition: width .3s, background .3s; }
-.vr__dot[aria-selected="true"] { width: 24px; background: var(--vr-accent); }
+.vr__below { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 26px; }
+.vr__auto {
+  display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%;
+  background: var(--vr-glass); color: var(--vr-glass-fg); cursor: pointer; box-shadow: 0 2px 8px rgba(0, 0, 0, .12);
+}
+.vr__auto .i-play { display: none; }
+.vr__auto[aria-pressed="true"] .i-pause { display: none; }
+.vr__auto[aria-pressed="true"] .i-play { display: block; }
+.vr__dots { display: flex; flex-wrap: wrap; justify-content: center; gap: 7px; }
+.vr__dot {
+  width: 8px; height: 8px; padding: 0; border: 0; border-radius: 8px; cursor: pointer;
+  background: color-mix(in srgb, var(--vr-heading) 22%, transparent); transition: width .35s, background .35s;
+}
+.vr__dot[aria-selected="true"] { width: 28px; background: var(--vr-ig-line); }
+.vr--ring-accent .vr__dot[aria-selected="true"], .vr--ring-none .vr__dot[aria-selected="true"] { background: var(--vr-accent); }
 
-.vr__cta { margin-top: 24px; text-align: center; }
+.vr__cta { margin-top: 26px; text-align: center; }
 .vr__button {
-  display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: 12px 26px;
-  border: 1px solid var(--vr-accent); background: var(--vr-accent); color: #fff; text-decoration: none;
-  font-size: 13px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; transition: opacity .2s;
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 50px; padding: 13px 28px;
+  border-radius: 999px; background: var(--vr-ig-line); color: #fff; text-decoration: none;
+  font-size: 14px; font-weight: 700; letter-spacing: .04em; box-shadow: 0 10px 26px rgba(214, 41, 118, .32);
+  transition: transform .2s, box-shadow .2s;
 }
-.vr__button:hover { opacity: .88; }
-.vr__empty { margin: 0; padding: 30px; border: 1px dashed #bbb; border-radius: 8px; color: #777; text-align: center; }
+.vr--ring-accent .vr__button, .vr--ring-none .vr__button { background: var(--vr-accent); box-shadow: 0 10px 26px rgba(0, 0, 0, .2); }
+.vr__button:hover { transform: translateY(-2px); box-shadow: 0 14px 32px rgba(214, 41, 118, .42); }
+.vr__button:focus-visible { outline: 3px solid var(--vr-heading); outline-offset: 3px; }
+.vr__empty { margin: 0; padding: 30px; border: 1px dashed #bbb; border-radius: 12px; color: #777; text-align: center; }
 
 @media (max-width: 749px) {
-  .vr__stage { height: calc(min(var(--vr-card), 64vw) * 16 / 9); }
-  .vr__card { width: min(var(--vr-card), 64vw); margin-left: calc(min(var(--vr-card), 64vw) / -2); }
+  .vr { --vr-card-m: min(var(--vr-card), 66vw); }
+  .vr__stage { height: calc(var(--vr-card-m) * 16 / 9 + 8px); }
+  .vr__card { width: var(--vr-card-m); margin-left: calc(var(--vr-card-m) / -2); }
+  .vr--glow .vr__stage::before, .vr--dark .vr__stage::before { width: calc(var(--vr-card-m) * 2); height: var(--vr-card-m); }
   .vr__nav { display: none; }
+  .vr__big-circle { width: 62px; height: 62px; }
+  .vr__head { margin-bottom: 26px; }
 }
-@media (prefers-reduced-motion: reduce) { .vr__card { transition: opacity .2s; } }
+@media (prefers-reduced-motion: reduce) {
+  .vr__card { transition: opacity .2s; }
+  .vr__card::before, .vr__big-circle::after { animation: none; }
+}

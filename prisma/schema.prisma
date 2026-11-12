@@ -54,6 +54,7 @@ model SelectedReel {
   fileId       String? // Shopify Files id (gid://shopify/Video/...)
   videoUrl     String? // Shopify CDN mp4 (permanent)
   posterUrl    String? // Shopify CDN preview image (permanent)
+  pinned       Boolean  @default(false) // shown with a "Pinned" badge
   status       String   @default("processing") // processing | ready | failed
   error        String?
   createdAt    DateTime @default(now())
@@ -61,4 +62,13 @@ model SelectedReel {
 
   @@unique([shop, mediaId])
   @@index([shop, position])
+}
+
+// How the store's reels are chosen.
+model ReelSettings {
+  shop     String    @id
+  mode     String    @default("auto") // auto = pinned reels first, then the newest ones | manual = merchant ticks reels
+  count    Int       @default(10) // how many reels to show in auto mode
+  pins     String[]  @default([]) // reels the merchant pinned in ReelStage (Instagram media ids, in order)
+  lastSync DateTime?
 }

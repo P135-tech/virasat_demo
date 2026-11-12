@@ -19,6 +19,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     case "SHOP_REDACT":
       await db.instagramAccount.deleteMany({ where: { shop } });
       await db.selectedReel.deleteMany({ where: { shop } });
+      await db.reelSettings.deleteMany({ where: { shop } });
       await db.session.deleteMany({ where: { shop } });
       break;
     default:

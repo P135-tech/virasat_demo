@@ -6,8 +6,18 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { authorizeUrl, disconnect, listReels, type Reel } from "../lib/instagram.server";
-import { publishToStore, processPending, refreshStatuses, resumeIfStuck, saveSelection, type Admin } from "../lib/reels.server";
-import { MAX_REELS } from "../lib/constants";
+import {
+  getSettings,
+  processPending,
+  publishToStore,
+  refreshStatuses,
+  resumeIfStuck,
+  saveSelection,
+  syncAuto,
+  updateSettings,
+  type Admin,
+} from "../lib/reels.server";
+import { AUTO_COUNT, MAX_REELS } from "../lib/constants";
 import { themeSupportsAppBlocks } from "../lib/theme.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -24,6 +34,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   const account = await db.instagramAccount.findUnique({ where: { shop } });
+  const settings = await getSettings(shop);
   let reels: Reel[] = [];
   let igError: string | null = null;
   if (account) {
@@ -31,6 +42,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       reels = await listReels(shop);
     } catch (e) {
       igError = e instanceof Error ? e.message : String(e);
+    }
+    // Automatic mode: pick up new or newly pinned reels each time the app is opened.
+    if (!igError && settings.mode === "auto") {
+      try {
+        await syncAuto(admin as unknown as Admin, shop, reels);
+      } catch (e) {
+        console.error("syncAuto", e);
+      }
     }
     try {
       await refreshStatuses(admin as unknown as Admin, shop);
@@ -52,6 +71,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     reels,
     igError,
     theme,
+    settings: { mode: settings.mode, count: settings.count, pins: settings.pins },
     selected: selected.map((s) => ({
       mediaId: s.mediaId,
       status: s.status,
@@ -59,6 +79,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       caption: s.caption,
       image: s.posterUrl || s.igThumbnail,
       permalink: s.permalink,
+      pinned: s.pinned,
     })),
   };
 };
@@ -79,6 +100,25 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       }[];
       await saveSelection(a, shop, chosen);
       return { ok: true, message: chosen.length ? "Saved. New reels are being copied to your store." : "Saved. No reels are shown now." };
+    }
+    if (intent === "mode") {
+      const mode = String(fd.get("mode")) === "manual" ? "manual" : "auto";
+      const count = Math.min(MAX_REELS, Math.max(1, Number(fd.get("count")) || AUTO_COUNT));
+      await updateSettings(shop, { mode, count });
+      if (mode === "auto") await syncAuto(a, shop);
+      return {
+        ok: true,
+        message: mode === "auto" ? `Automatic: showing pinned reels first, then your newest, ${count} in total.` : "You now choose the reels yourself.",
+      };
+    }
+    if (intent === "pin" || intent === "unpin") {
+      const mediaId = String(fd.get("mediaId"));
+      const s = await getSettings(shop);
+      const pins = s.pins.filter((x) => x !== mediaId);
+      if (intent === "pin") pins.push(mediaId);
+      await updateSettings(shop, { pins });
+      await syncAuto(a, shop);
+      return { ok: true, message: intent === "pin" ? "Pinned. It now shows before your newest reels." : "Unpinned." };
     }
     if (intent === "move" || intent === "remove") {
       const mediaId = String(fd.get("mediaId"));
@@ -227,6 +267,17 @@ export default function Reels() {
 
   const shownCount = d.selected.filter((s) => s.status === "ready").length;
   const failed = d.selected.filter((s) => s.status === "failed");
+  const auto = d.settings.mode === "auto";
+  const shownIds = d.selected.map((s) => s.mediaId);
+
+  const pill = (bg: string, fg = "#fff"): CSSProperties => ({
+    position: "absolute", top: 8, padding: "3px 8px", borderRadius: 999, background: bg, color: fg,
+    fontWeight: 700, fontSize: 11, lineHeight: "16px", boxShadow: "0 2px 6px rgba(0,0,0,.2)",
+  });
+  const modeBtn = (on: boolean): CSSProperties => ({
+    flex: "1 1 240px", textAlign: "left", padding: "14px 16px", borderRadius: 12, cursor: "pointer", font: "inherit",
+    border: on ? "2px solid #111" : "1px solid #d4d4d4", background: on ? "#f7f7f7" : "#fff",
+  });
 
   return (
     <s-page heading="ReelStage">
@@ -242,31 +293,79 @@ export default function Reels() {
         </s-stack>
       </s-section>
 
+      <s-section heading="Which reels to show">
+        <s-stack gap="base">
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+            <button type="button" style={modeBtn(auto)} disabled={busy} onClick={() => !auto && post({ intent: "mode", mode: "auto", count: String(d.settings.count) })}>
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>{auto ? "● " : "○ "}Automatic (recommended)</div>
+              <div style={{ color: "#616161", fontSize: 13 }}>
+                Pinned reels first, then your newest reels. New reels are added by themselves.
+              </div>
+            </button>
+            <button type="button" style={modeBtn(!auto)} disabled={busy} onClick={() => auto && post({ intent: "mode", mode: "manual", count: String(d.settings.count) })}>
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>{!auto ? "● " : "○ "}Choose myself</div>
+              <div style={{ color: "#616161", fontSize: 13 }}>Tick the exact reels to show and set their order.</div>
+            </button>
+          </div>
+          {auto && (
+            <s-stack direction="inline" gap="base">
+              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span>Number of reels to show</span>
+                <select
+                  value={d.settings.count}
+                  disabled={busy}
+                  onChange={(e) => post({ intent: "mode", mode: "auto", count: e.currentTarget.value })}
+                  style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #c9c9c9", font: "inherit" }}
+                >
+                  {[4, 6, 8, 10, 12, 15, 20].map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </s-stack>
+          )}
+          {auto && (
+            <s-paragraph>
+              <s-text color="subdued">
+                Example with 10: 1 pinned reel + your 9 newest; 3 pinned reels + your 7 newest. Reels pinned on Instagram are
+                detected automatically. You can also pin any reel below.
+              </s-text>
+            </s-paragraph>
+          )}
+        </s-stack>
+      </s-section>
+
       <s-section heading={`On your store (${shownCount} of ${d.selected.length} ready)`}>
         <s-stack gap="base">
           {d.selected.length === 0 ? (
-            <s-paragraph>No reels chosen yet. Tick reels below and click Save.</s-paragraph>
+            <s-paragraph>{auto ? "No reels found yet." : "No reels chosen yet. Tick reels below and click Save."}</s-paragraph>
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 12 }}>
               {d.selected.map((s, i) => (
-                <div key={s.mediaId} style={card}>
+                <div key={s.mediaId} style={{ ...card, position: "relative" }}>
                   {s.image ? <img src={s.image} alt="" style={thumb} /> : <div style={thumb} />}
+                  <span style={{ ...pill("#111"), left: 8 }}>{i + 1}</span>
+                  {s.pinned && <span style={{ ...pill("#d62976"), right: 8 }}>📌 Pinned</span>}
                   <div style={{ padding: 8, display: "grid", gap: 6 }}>
                     {s.status === "ready" && <s-badge tone="success">On store</s-badge>}
                     {s.status === "processing" && <s-badge tone="info">Copying…</s-badge>}
                     {s.status === "failed" && <s-badge tone="critical">Failed</s-badge>}
                     {s.error && <s-text color="subdued">{s.error}</s-text>}
-                    <s-stack direction="inline" gap="small">
-                      <s-button disabled={i === 0 || busy} onClick={() => post({ intent: "move", mediaId: s.mediaId, dir: "up" })} accessibilityLabel="Move left">
-                        ←
-                      </s-button>
-                      <s-button disabled={i === d.selected.length - 1 || busy} onClick={() => post({ intent: "move", mediaId: s.mediaId, dir: "down" })} accessibilityLabel="Move right">
-                        →
-                      </s-button>
-                      <s-button tone="critical" disabled={busy} onClick={() => post({ intent: "remove", mediaId: s.mediaId })}>
-                        Remove
-                      </s-button>
-                    </s-stack>
+                    {!auto && (
+                      <s-stack direction="inline" gap="small">
+                        <s-button disabled={i === 0 || busy} onClick={() => post({ intent: "move", mediaId: s.mediaId, dir: "up" })} accessibilityLabel="Move left">
+                          ←
+                        </s-button>
+                        <s-button disabled={i === d.selected.length - 1 || busy} onClick={() => post({ intent: "move", mediaId: s.mediaId, dir: "down" })} accessibilityLabel="Move right">
+                          →
+                        </s-button>
+                        <s-button tone="critical" disabled={busy} onClick={() => post({ intent: "remove", mediaId: s.mediaId })}>
+                          Remove
+                        </s-button>
+                      </s-stack>
+                    )}
                   </div>
                 </div>
               ))}
@@ -294,12 +393,39 @@ export default function Reels() {
         </s-stack>
       </s-section>
 
-      <s-section heading={`Your Instagram reels (${chosen.length} of ${MAX_REELS} chosen)`}>
+      <s-section heading={auto ? "Your Instagram reels" : `Your Instagram reels (${chosen.length} of ${MAX_REELS} chosen)`}>
         <s-stack gap="base">
           {d.igError && <s-banner tone="critical">{d.igError}</s-banner>}
           {!d.igError && d.reels.length === 0 && <s-paragraph>No reels found on @{d.account.username} yet.</s-paragraph>}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 14 }}>
             {d.reels.map((r) => {
+              if (auto) {
+                const n = shownIds.indexOf(r.id) + 1;
+                const myPin = d.settings.pins.includes(r.id);
+                return (
+                  <div key={r.id} style={{ ...card, position: "relative", outline: n ? "3px solid #111111" : "none", outlineOffset: -1 }}>
+                    {r.thumbnail ? <img src={r.thumbnail} alt="" style={thumb} loading="lazy" /> : <div style={thumb} />}
+                    {n > 0 && <span style={{ ...pill("#111"), left: 8 }}>Showing #{n}</span>}
+                    {(r.pinned || myPin) && <span style={{ ...pill("#d62976"), right: 8 }}>📌</span>}
+                    <span style={{ padding: "8px 10px", display: "grid", gap: 6 }}>
+                      <span style={{ color: "#616161", fontSize: 12 }}>
+                        {when(r.timestamp)}
+                        {r.pinned ? " · Pinned on Instagram" : ""}
+                      </span>
+                      {r.caption && (
+                        <span style={{ color: "#303030", fontSize: 12, lineHeight: 1.35, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+                          {r.caption}
+                        </span>
+                      )}
+                      {!r.pinned && (
+                        <s-button disabled={busy} onClick={() => post({ intent: myPin ? "unpin" : "pin", mediaId: r.id })}>
+                          {myPin ? "Unpin" : "📌 Pin to top"}
+                        </s-button>
+                      )}
+                    </span>
+                  </div>
+                );
+              }
               const on = chosen.includes(r.id);
               const n = chosen.indexOf(r.id) + 1;
               return (
@@ -308,16 +434,7 @@ export default function Reels() {
                   style={{ ...card, cursor: "pointer", outline: on ? "3px solid #111111" : "none", outlineOffset: -1, position: "relative" }}
                 >
                   {r.thumbnail ? <img src={r.thumbnail} alt="" style={thumb} loading="lazy" /> : <div style={thumb} />}
-                  {on && (
-                    <span
-                      style={{
-                        position: "absolute", top: 8, left: 8, minWidth: 26, height: 26, borderRadius: 13, background: "#111111",
-                        color: "#fff", display: "grid", placeItems: "center", fontWeight: 700, fontSize: 13,
-                      }}
-                    >
-                      {n}
-                    </span>
-                  )}
+                  {on && <span style={{ ...pill("#111"), left: 8 }}>{n}</span>}
                   <span style={{ padding: "8px 10px", display: "grid", gap: 4 }}>
                     <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <input type="checkbox" checked={on} onChange={() => toggle(r.id)} />
@@ -334,12 +451,14 @@ export default function Reels() {
               );
             })}
           </div>
-          <s-stack direction="inline" gap="base">
-            <s-button variant="primary" onClick={save} disabled={!dirty || busy}>
-              Save
-            </s-button>
-            {dirty && <s-text color="subdued">You have unsaved changes.</s-text>}
-          </s-stack>
+          {!auto && (
+            <s-stack direction="inline" gap="base">
+              <s-button variant="primary" onClick={save} disabled={!dirty || busy}>
+                Save
+              </s-button>
+              {dirty && <s-text color="subdued">You have unsaved changes.</s-text>}
+            </s-stack>
+          )}
         </s-stack>
       </s-section>
     </s-page>

@@ -18,6 +18,8 @@ export type Reel = {
   thumbnail: string | null;
   mediaUrl: string | null;
   timestamp: string | null;
+  /** Pinned to the top of the Instagram profile (detected from the order Meta lists the posts in). */
+  pinned: boolean;
 };
 
 function env(name: string, fallback?: string): string {
@@ -167,7 +169,33 @@ function toReel(m: MediaNode): Reel {
     thumbnail: m.thumbnail_url ?? null,
     mediaUrl: m.media_url ?? null,
     timestamp: m.timestamp ?? null,
+    pinned: false,
   };
+}
+
+/**
+ * Meta's API has no "pinned" field, but pinned posts come first in the profile order.
+ * Any of the first 3 posts that is older than a post listed after it must be pinned.
+ * (A pinned post that is also the newest can't be told apart, but it is shown first anyway.)
+ */
+function markPinned(all: MediaNode[]): Set<string> {
+  const pinned = new Set<string>();
+  const t = (m: MediaNode) => (m.timestamp ? Date.parse(m.timestamp) : 0);
+  for (let i = 0; i < Math.min(3, all.length); i++) {
+    const mine = t(all[i]);
+    if (!mine) continue;
+    for (let j = i + 1; j < all.length; j++) {
+      if (t(all[j]) > mine) {
+        pinned.add(all[i].id);
+        break;
+      }
+    }
+  }
+  return pinned;
+}
+
+function isReel(m: MediaNode) {
+  return m.media_type === "VIDEO" || m.media_product_type === "REELS";
 }
 
 function friendly(e: unknown): Error {
@@ -178,12 +206,12 @@ function friendly(e: unknown): Error {
   return e instanceof Error ? e : new Error(msg);
 }
 
-/** The account's latest reels (videos), newest first. */
+/** The account's reels (videos) in profile order: pinned first, then newest first. */
 export async function listReels(shop: string, max = 60): Promise<Reel[]> {
   const acc = await db.instagramAccount.findUnique({ where: { shop } });
   if (!acc) return [];
   const token = decrypt(acc.accessToken);
-  const out: Reel[] = [];
+  const all: MediaNode[] = [];
   const first = new URL(`${GRAPH}/${acc.igUserId}/media`);
   first.searchParams.set("fields", FIELDS);
   first.searchParams.set("limit", "50");
@@ -191,18 +219,24 @@ export async function listReels(shop: string, max = 60): Promise<Reel[]> {
   let next: string | null = first.toString();
   let pages = 0;
   try {
-    while (next && out.length < max && pages < 6) {
+    let videos = 0;
+    while (next && videos < max && pages < 6) {
       pages++;
       const page: { data: MediaNode[]; paging?: { next?: string } } = await fbJson(await fetch(next));
       for (const m of page.data || []) {
-        if (m.media_type === "VIDEO" || m.media_product_type === "REELS") out.push(toReel(m));
+        all.push(m);
+        if (isReel(m)) videos++;
       }
       next = page.paging?.next ?? null;
     }
   } catch (e) {
     throw friendly(e);
   }
-  return out.slice(0, max);
+  const pinned = markPinned(all);
+  return all
+    .filter(isReel)
+    .map((m) => ({ ...toReel(m), pinned: pinned.has(m.id) }))
+    .slice(0, max);
 }
 
 /** One reel with a fresh video address (Instagram's addresses expire after a while). */

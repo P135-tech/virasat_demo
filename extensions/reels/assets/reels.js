@@ -1,6 +1,7 @@
-/* ReelStage – centre-stage carousel
-   The active reel plays in the middle; when it ends the next one moves to the centre
-   and plays, going round in a loop. Side reels are smaller; click one to bring it forward. */
+/* ReelStage – centre-stage reels carousel
+   Preview mode: the centre reel plays muted for a few seconds, then the next one slides in (looping).
+   Watch mode: the shopper presses play and the whole reel plays with sound; afterwards previews continue.
+   Side reels are smaller and tilted; click one to bring it to the centre. */
 (function () {
   function init(root) {
     if (root.__vr) return;
@@ -11,14 +12,22 @@
     var n = cards.length;
     if (!n) return;
 
-    var advance = root.getAttribute('data-advance') !== 'false';
-    var sidesWanted = Number(root.getAttribute('data-sides')) || 2;
     var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var advance = root.getAttribute('data-advance') !== 'false' && !reduce;
+    var previewLen = Math.max(1, Number(root.getAttribute('data-preview')) || 4);
+    var sidesWanted = Number(root.getAttribute('data-sides')) || 2;
+
     var active = 0;
-    var soundOn = false;      // stays on for the next reels once the shopper turns it on
-    var userPaused = false;
+    var full = false;          // watching the whole reel
+    var soundOn = true;        // sound in watch mode (shopper can mute)
+    var userPaused = false;    // paused in watch mode
+    var slideshowOff = !advance;
+    var hovering = false;
     var inView = false;
     var raf = 0;
+
+    var autoBtn = root.querySelector('.vr__auto');
+    if (autoBtn && !advance) autoBtn.hidden = true;
 
     var dotsBox = root.querySelector('.vr__dots');
     var dots = [];
@@ -29,13 +38,15 @@
         d.className = 'vr__dot';
         d.setAttribute('role', 'tab');
         d.setAttribute('aria-label', String(i + 1));
-        d.addEventListener('click', function () { go(i, true); });
+        d.addEventListener('click', function () { go(i); });
         dotsBox.appendChild(d);
         dots.push(d);
       });
     }
 
     function sides() { return window.innerWidth < 750 ? 1 : sidesWanted; }
+    function videoOf(i) { return cards[i].querySelector('.vr__video'); }
+    function barOf(i) { return cards[i].querySelector('.vr__progress span'); }
 
     /* shortest way round the circle: -2, -1, 0, 1, 2 ... */
     function offset(i) {
@@ -45,108 +56,191 @@
     }
 
     function layout() {
-      var w = cards[0].offsetWidth; // width before scaling
+      var w = cards[0].offsetWidth;
       var sideScale = parseFloat(getComputedStyle(root).getPropertyValue('--vr-side-scale')) || 0.8;
       var maxSide = sides();
       cards.forEach(function (c, i) {
         var d = offset(i);
         var a = Math.abs(d);
-        var s = a === 0 ? 1 : Math.pow(sideScale, a);
-        // each side card sits just next to the previous one, slightly tucked behind it
+        var s = a === 0 ? (full ? 1.03 : 1) : Math.pow(sideScale, a);
         var x = 0;
-        for (var k = 1; k <= a; k++) x += w * (Math.pow(sideScale, k - 1) + Math.pow(sideScale, k)) / 2 * 0.86;
+        for (var k = 1; k <= a; k++) x += w * (Math.pow(sideScale, k - 1) + Math.pow(sideScale, k)) / 2 * 0.82;
+        if (full && a > 0) x += w * 0.06;
         x = d < 0 ? -x : x;
         var hidden = a > maxSide;
         c.style.setProperty('--x', x + 'px');
         c.style.setProperty('--s', s);
-        c.style.setProperty('--o', hidden ? 0 : (a === 0 ? 1 : 1 - a * 0.12));
+        c.style.setProperty('--r', (a === 0 ? 0 : (d < 0 ? 14 : -14)) + 'deg');
+        c.style.setProperty('--o', hidden ? 0 : 1);
         c.style.zIndex = String(20 - a);
         c.classList.toggle('is-active', a === 0);
         c.classList.toggle('is-hidden', hidden);
         c.setAttribute('aria-hidden', a === 0 ? 'false' : 'true');
         var pick = c.querySelector('.vr__pick');
         if (pick) pick.tabIndex = hidden || a === 0 ? -1 : 0;
-        c.querySelectorAll('.vr__ctrl, .vr__ig').forEach(function (b) { b.tabIndex = a === 0 ? 0 : -1; });
+        c.querySelectorAll('.vr__ctrl, .vr__big').forEach(function (b) { b.tabIndex = a === 0 ? 0 : -1; });
       });
+      root.classList.toggle('is-watching', full);
       dots.forEach(function (d, i) { d.setAttribute('aria-selected', i === active ? 'true' : 'false'); });
     }
 
-    function videoOf(i) { return cards[i].querySelector('.vr__video'); }
-
-    function playActive() {
+    function stopOthers() {
       cards.forEach(function (c, i) {
+        if (i === active) return;
         var v = videoOf(i);
-        if (i !== active) {
-          if (!v.paused) v.pause();
-          if (v.currentTime > 0) { try { v.currentTime = 0; } catch (e) {} }
-          c.classList.remove('is-paused');
-          var bar = c.querySelector('.vr__progress span'); if (bar) bar.style.width = '0';
-        }
+        if (!v.paused) v.pause();
+        if (v.currentTime > 0) { try { v.currentTime = 0; } catch (e) {} }
+        v.muted = true;
+        c.classList.remove('is-full', 'is-paused', 'is-sound');
+        var b = barOf(i); if (b) b.style.width = '0';
       });
-      // load the reels next to the centre one so they start quickly
-      [active, (active + 1) % n, (active - 1 + n) % n].forEach(function (i) { var v = videoOf(i); if (v.preload === 'none') v.preload = 'metadata'; });
-
-      var v = videoOf(active);
-      var card = cards[active];
-      v.muted = !soundOn;
-      card.classList.toggle('is-sound', soundOn);
-      if (!inView || userPaused) { card.classList.add('is-paused'); return; }
-      card.classList.remove('is-paused');
-      var p = v.play();
-      if (p && p.catch) p.catch(function () {
-        // the browser blocked sound: play muted instead
-        v.muted = true; soundOn = false; card.classList.remove('is-sound');
-        var q = v.play(); if (q && q.catch) q.catch(function () { card.classList.add('is-paused'); });
+      // warm up the neighbours so they start instantly
+      [1, -1, 2].forEach(function (k) {
+        var v = videoOf((active + k + n) % n);
+        if (v.preload === 'none') v.preload = 'metadata';
       });
-      tick();
+      var cur = videoOf(active);
+      if (cur.preload !== 'auto') cur.preload = 'auto';
     }
 
-    function tick() {
+    function safePlay(v, card) {
+      var p = v.play();
+      if (p && p.catch) p.catch(function () {
+        // the browser refused sound: play muted instead
+        if (!v.muted) {
+          v.muted = true; soundOn = false; card.classList.remove('is-sound');
+          var q = v.play(); if (q && q.catch) q.catch(function () { card.classList.add('is-paused'); });
+        } else {
+          card.classList.add('is-paused');
+        }
+      });
+    }
+
+    /* ---- preview mode ---- */
+    function startPreview() {
+      full = false;
+      layout();
+      stopOthers();
+      var v = videoOf(active), card = cards[active];
+      card.classList.remove('is-full', 'is-paused', 'is-sound');
+      v.muted = true;
+      v.loop = false;
+      try { v.currentTime = 0; } catch (e) {}
+      if (!inView || reduce) { v.pause(); cancelAnimationFrame(raf); return; }
+      safePlay(v, card);
+      loop();
+    }
+
+    /* ---- watch mode ---- */
+    function startFull() {
+      full = true;
+      userPaused = false;
+      layout();
+      stopOthers();
+      var v = videoOf(active), card = cards[active];
+      card.classList.add('is-full');
+      card.classList.remove('is-paused');
+      v.loop = false;
+      v.muted = !soundOn;
+      card.classList.toggle('is-sound', soundOn);
+      try { v.currentTime = 0; } catch (e) {}
+      safePlay(v, card);
+      loop();
+      var pb = card.querySelector('.vr__ctrl--play');
+      if (pb) pb.focus({ preventScroll: true });
+    }
+
+    function endFull(next) {
+      if (!full) return;
+      full = false;
+      if (next) go(active + 1); else startPreview();
+    }
+
+    /* progress bar + timing */
+    function loop() {
       cancelAnimationFrame(raf);
-      var v = videoOf(active);
-      var bar = cards[active].querySelector('.vr__progress span');
-      (function loop() {
-        if (bar && v.duration) bar.style.width = Math.min(100, (v.currentTime / v.duration) * 100) + '%';
-        raf = requestAnimationFrame(loop);
+      var i = active;
+      var v = videoOf(i), bar = barOf(i);
+      (function step() {
+        if (i !== active) return;
+        var dur = v.duration || 0;
+        if (full) {
+          if (bar && dur) bar.style.width = Math.min(100, (v.currentTime / dur) * 100) + '%';
+        } else {
+          var len = dur ? Math.min(previewLen, Math.max(0.5, dur - 0.15)) : previewLen;
+          if (bar) bar.style.width = Math.min(100, (v.currentTime / len) * 100) + '%';
+          if (v.currentTime >= len) {
+            if (!slideshowOff && !hovering && n > 1) { go(active + 1); return; }
+            // holding on this reel: keep the preview looping
+            if (v.currentTime >= len + 0.05) { try { v.currentTime = 0; } catch (e) {} }
+          }
+        }
+        raf = requestAnimationFrame(step);
       })();
     }
 
-    function go(i, byUser) {
+    function go(i) {
       active = ((i % n) + n) % n;
-      if (byUser) userPaused = false;
-      layout();
-      playActive();
+      startPreview();
     }
 
     cards.forEach(function (c, i) {
       var v = videoOf(i);
-      v.loop = !advance || n === 1;
-      v.addEventListener('ended', function () { if (i === active && advance && n > 1) go(active + 1); });
-      v.addEventListener('error', function () { if (i === active && advance && n > 1) setTimeout(function () { go(active + 1); }, 800); });
+      v.addEventListener('ended', function () {
+        if (i !== active) return;
+        if (full) endFull(advance && n > 1);
+        else if (!slideshowOff && n > 1) go(active + 1);
+        else startPreview();
+      });
+      v.addEventListener('error', function () {
+        if (i === active && !full && !slideshowOff && n > 1) setTimeout(function () { if (i === active) go(active + 1); }, 800);
+      });
       var pick = c.querySelector('.vr__pick');
-      if (pick) pick.addEventListener('click', function () { go(i, true); });
+      if (pick) pick.addEventListener('click', function () { go(i); });
+
+      var big = c.querySelector('.vr__big');
+      if (big) big.addEventListener('click', function () { if (i === active) startFull(); });
+
       var play = c.querySelector('.vr__ctrl--play');
       if (play) play.addEventListener('click', function () {
-        if (v.paused) { userPaused = false; playActive(); } else { userPaused = true; v.pause(); c.classList.add('is-paused'); }
+        if (v.paused) { userPaused = false; c.classList.remove('is-paused'); safePlay(v, c); loop(); }
+        else { userPaused = true; v.pause(); c.classList.add('is-paused'); }
       });
       var snd = c.querySelector('.vr__ctrl--sound');
       if (snd) snd.addEventListener('click', function () {
         soundOn = !soundOn;
         v.muted = !soundOn;
         c.classList.toggle('is-sound', soundOn);
-        if (soundOn && v.paused) { userPaused = false; playActive(); }
       });
-      // tapping the centre video itself pauses / plays
-      v.addEventListener('click', function () { if (i === active && play) play.click(); });
+      var close = c.querySelector('.vr__ctrl--close');
+      if (close) close.addEventListener('click', function () { endFull(false); });
+
+      // tap on the centre video: preview → watch the full reel; watching → pause / play
+      v.addEventListener('click', function () {
+        if (i !== active) return;
+        if (!full) startFull();
+        else if (play) play.click();
+      });
     });
 
     var prev = root.querySelector('.vr__nav--prev'), next = root.querySelector('.vr__nav--next');
-    if (prev) prev.addEventListener('click', function () { go(active - 1, true); });
-    if (next) next.addEventListener('click', function () { go(active + 1, true); });
+    if (prev) prev.addEventListener('click', function () { go(active - 1); });
+    if (next) next.addEventListener('click', function () { go(active + 1); });
+
+    if (autoBtn) autoBtn.addEventListener('click', function () {
+      slideshowOff = !slideshowOff;
+      autoBtn.setAttribute('aria-pressed', slideshowOff ? 'true' : 'false');
+    });
+
+    // hovering the centre reel holds it in place (desktop)
+    stage.addEventListener('mouseenter', function () { hovering = true; });
+    stage.addEventListener('mouseleave', function () { hovering = false; });
 
     root.addEventListener('keydown', function (e) {
-      if (e.key === 'ArrowRight') { go(active + 1, true); e.preventDefault(); }
-      if (e.key === 'ArrowLeft') { go(active - 1, true); e.preventDefault(); }
+      if (e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
+      if (e.key === 'ArrowRight') { go(active + 1); e.preventDefault(); }
+      if (e.key === 'ArrowLeft') { go(active - 1); e.preventDefault(); }
+      if (e.key === 'Escape' && full) { endFull(false); e.preventDefault(); }
     });
 
     /* swipe on phones */
@@ -154,27 +248,32 @@
     stage.addEventListener('touchstart', function (e) { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
     stage.addEventListener('touchend', function (e) {
       var dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
-      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) go(active + (dx < 0 ? 1 : -1), true);
+      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) go(active + (dx < 0 ? 1 : -1));
     }, { passive: true });
 
     /* only play while the block is on screen */
     if ('IntersectionObserver' in window) {
       new IntersectionObserver(function (entries) {
         inView = entries[0].isIntersecting;
-        if (inView) playActive();
-        else { videoOf(active).pause(); cancelAnimationFrame(raf); }
+        var v = videoOf(active);
+        if (inView) {
+          if (full) { if (!userPaused) { safePlay(v, cards[active]); loop(); } }
+          else startPreview();
+        } else {
+          v.pause();
+          cancelAnimationFrame(raf);
+        }
       }, { threshold: 0.35 }).observe(stage);
     } else {
       inView = true;
     }
 
-    if (reduce) userPaused = true; // shoppers who prefer less motion press play themselves
     window.addEventListener('resize', layout);
-    layout();
-    playActive();
+    startPreview();
   }
 
   function boot() { document.querySelectorAll('.vr').forEach(init); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
   document.addEventListener('shopify:section:load', boot);
+  document.addEventListener('shopify:block:select', boot);
 })();

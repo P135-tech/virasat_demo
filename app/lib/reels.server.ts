@@ -1,13 +1,13 @@
 import db from "../db.server";
 import { unauthenticated } from "../shopify.server";
-import { getReel } from "./instagram.server";
+import { getReel, listReels, type Reel } from "./instagram.server";
 
 /** The part of the Admin API client this file needs (works for authenticate.admin and unauthenticated.admin). */
 export type Admin = {
   graphql: (query: string, options?: { variables?: Record<string, unknown> }) => Promise<Response>;
 };
 
-import { MAX_REELS } from "./constants";
+import { AUTO_COUNT, MAX_REELS } from "./constants";
 export { MAX_REELS };
 
 async function gql<T>(admin: Admin, query: string, variables?: Record<string, unknown>): Promise<T> {
@@ -194,7 +194,10 @@ export async function publishToStore(admin: Admin, shop: string) {
     p: r.posterUrl,
     l: r.permalink,
     c: shortCaption(r.caption),
+    pin: r.pinned,
   }));
+  const acc = await db.instagramAccount.findUnique({ where: { shop } });
+  const profile = { u: acc?.username || "" };
   const inst = await gql<{ currentAppInstallation: { id: string } }>(admin, `#graphql
     query { currentAppInstallation { id } }`);
   const res = await gql<{ metafieldsSet: { userErrors: { message: string }[] } }>(
@@ -206,6 +209,7 @@ export async function publishToStore(admin: Admin, shop: string) {
     {
       metafields: [
         { ownerId: inst.currentAppInstallation.id, namespace: "reels", key: "selected", type: "json", value: JSON.stringify(value) },
+        { ownerId: inst.currentAppInstallation.id, namespace: "reels", key: "profile", type: "json", value: JSON.stringify(profile) },
       ],
     },
   );
@@ -217,7 +221,7 @@ export async function publishToStore(admin: Admin, shop: string) {
 export async function saveSelection(
   admin: Admin,
   shop: string,
-  chosen: { id: string; caption: string | null; permalink: string | null; thumbnail: string | null }[],
+  chosen: { id: string; caption: string | null; permalink: string | null; thumbnail: string | null; pinned?: boolean }[],
 ) {
   const list = chosen.slice(0, MAX_REELS);
   const keep = list.map((r) => r.id);
@@ -226,8 +230,8 @@ export async function saveSelection(
     const r = list[i];
     await db.selectedReel.upsert({
       where: { shop_mediaId: { shop, mediaId: r.id } },
-      create: { shop, mediaId: r.id, position: i, caption: r.caption, permalink: r.permalink, igThumbnail: r.thumbnail },
-      update: { position: i, igThumbnail: r.thumbnail ?? undefined },
+      create: { shop, mediaId: r.id, position: i, caption: r.caption, permalink: r.permalink, igThumbnail: r.thumbnail, pinned: !!r.pinned },
+      update: { position: i, igThumbnail: r.thumbnail ?? undefined, pinned: !!r.pinned },
     });
   }
   // Failed ones get another try when saved again.
@@ -237,4 +241,81 @@ export async function saveSelection(
   });
   await publishToStore(admin, shop);
   processPending(shop);
+}
+
+// ---------- Automatic mode: pinned reels first, then the newest ones ----------
+
+export type Settings = { mode: "auto" | "manual"; count: number; pins: string[]; lastSync: Date | null };
+
+export async function getSettings(shop: string): Promise<Settings> {
+  const s = await db.reelSettings.findUnique({ where: { shop } });
+  return {
+    mode: s?.mode === "manual" ? "manual" : "auto",
+    count: Math.min(MAX_REELS, Math.max(1, s?.count ?? AUTO_COUNT)),
+    pins: s?.pins ?? [],
+    lastSync: s?.lastSync ?? null,
+  };
+}
+
+export async function updateSettings(shop: string, data: Partial<Omit<Settings, "lastSync">> & { lastSync?: Date | null }) {
+  await db.reelSettings.upsert({ where: { shop }, create: { shop, ...data }, update: data });
+}
+
+/**
+ * The reels automatic mode shows, in order:
+ * reels pinned on Instagram, then reels pinned in ReelStage, then the newest reels, up to `count`.
+ */
+export function autoPick(reels: Reel[], s: Pick<Settings, "count" | "pins">) {
+  const byId = new Map(reels.map((r) => [r.id, r]));
+  const out: (Reel & { pinned: boolean })[] = [];
+  const seen = new Set<string>();
+  const add = (r: Reel | undefined, pinned: boolean) => {
+    if (!r || seen.has(r.id) || out.length >= s.count) return;
+    seen.add(r.id);
+    out.push({ ...r, pinned });
+  };
+  reels.filter((r) => r.pinned).forEach((r) => add(r, true));
+  s.pins.forEach((id) => add(byId.get(id), true));
+  [...reels]
+    .sort((a, b) => Date.parse(b.timestamp || "0") - Date.parse(a.timestamp || "0"))
+    .forEach((r) => add(r, false));
+  return out;
+}
+
+/** Brings the store up to date in automatic mode (new reels in, old ones out). Returns true if anything changed. */
+export async function syncAuto(admin: Admin, shop: string, reels?: Reel[]) {
+  const s = await getSettings(shop);
+  if (s.mode !== "auto") return false;
+  const list = reels ?? (await listReels(shop));
+  const pick = autoPick(list, s);
+  const current = await db.selectedReel.findMany({ where: { shop }, orderBy: { position: "asc" } });
+  const same =
+    current.length === pick.length && current.every((c, i) => c.mediaId === pick[i].id && c.pinned === pick[i].pinned);
+  await updateSettings(shop, { lastSync: new Date() });
+  if (same) return false;
+  await saveSelection(admin, shop, pick);
+  return true;
+}
+
+/** Checks every store in automatic mode for new reels every few hours (while the server is awake). */
+async function syncAllStores() {
+  const accounts = await db.instagramAccount.findMany({ select: { shop: true } });
+  for (const { shop } of accounts) {
+    try {
+      const s = await getSettings(shop);
+      if (s.mode !== "auto") continue;
+      if (s.lastSync && Date.now() - s.lastSync.getTime() < 2 * 3600 * 1000) continue;
+      const { admin } = await unauthenticated.admin(shop);
+      await syncAuto(admin as unknown as Admin, shop);
+    } catch (e) {
+      console.error("auto sync failed for", shop, e instanceof Error ? e.message : e);
+    }
+  }
+}
+export { syncAllStores };
+
+const g = globalThis as unknown as { __reelstageTimer?: NodeJS.Timeout };
+if (!g.__reelstageTimer && process.env.NODE_ENV === "production") {
+  g.__reelstageTimer = setInterval(() => void syncAllStores(), 3 * 3600 * 1000);
+  setTimeout(() => void syncAllStores(), 60 * 1000);
 }

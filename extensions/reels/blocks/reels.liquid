@@ -1,35 +1,48 @@
 {%- liquid
   assign reels = app.metafields.reels.selected.value
-  assign limit = block.settings.max_reels | default: 12
+  assign profile = app.metafields.reels.profile.value
+  assign handle = profile.u
+  assign limit = block.settings.max_reels | default: 10
   assign uid = block.id
+  assign follow_link = block.settings.button_link
+  if follow_link == blank and handle != blank
+    assign follow_link = 'https://www.instagram.com/' | append: handle | append: '/'
+  endif
+  assign ring = block.settings.ring
 -%}
 
 {{ 'reels.css' | asset_url | stylesheet_tag }}
 
 <section
-  class="vr"
+  class="vr vr--{{ block.settings.style }} vr--ring-{{ ring }}"
   id="vr-{{ uid }}"
   data-advance="{{ block.settings.auto_advance }}"
+  data-preview="{{ block.settings.preview_seconds }}"
   data-sides="{{ block.settings.sides }}"
   style="
     --vr-card: {{ block.settings.card_width }}px;
     --vr-radius: {{ block.settings.radius }}px;
     --vr-side-scale: {{ block.settings.side_scale | divided_by: 100.0 }};
     --vr-accent: {{ block.settings.accent }};
-    --vr-heading: {{ block.settings.heading_color }};
-    --vr-text: {{ block.settings.text_color }};
-    --vr-bg: {{ block.settings.background | default: 'transparent' }};
+    {%- if block.settings.heading_color != blank %} --vr-heading: {{ block.settings.heading_color }};{% endif %}
+    {%- if block.settings.text_color != blank %} --vr-text: {{ block.settings.text_color }};{% endif %}
+    {%- if block.settings.style == 'custom' and block.settings.background != blank %} --vr-bg: {{ block.settings.background }};{% endif %}
     --vr-pad: {{ block.settings.padding }}px;
   "
 >
   <div class="vr__inner">
-    {%- if block.settings.eyebrow != blank or block.settings.heading != blank or block.settings.subheading != blank -%}
-      <div class="vr__head">
-        {%- if block.settings.eyebrow != blank -%}<p class="vr__eyebrow">{{ block.settings.eyebrow }}</p>{%- endif -%}
-        {%- if block.settings.heading != blank -%}<h2 class="vr__title">{{ block.settings.heading }}</h2>{%- endif -%}
-        {%- if block.settings.subheading != blank -%}<div class="vr__sub">{{ block.settings.subheading }}</div>{%- endif -%}
-      </div>
-    {%- endif -%}
+    <div class="vr__head">
+      {%- if block.settings.eyebrow != blank -%}
+        <p class="vr__eyebrow">
+          <span class="vr__eyebrow-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="14" height="14"><rect x="3" y="3" width="18" height="18" rx="5" fill="none" stroke="currentColor" stroke-width="2.2"/><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="2.2"/><circle cx="17.4" cy="6.6" r="1.3" fill="currentColor"/></svg>
+          </span>
+          {{ block.settings.eyebrow }}
+        </p>
+      {%- endif -%}
+      {%- if block.settings.heading != blank -%}<h2 class="vr__title">{{ block.settings.heading }}</h2>{%- endif -%}
+      {%- if block.settings.subheading != blank -%}<div class="vr__sub">{{ block.settings.subheading }}</div>{%- endif -%}
+    </div>
 
     {%- if reels and reels.size > 0 -%}
       <div class="vr__stage" aria-roledescription="carousel" aria-label="{{ block.settings.heading | default: 'Video reels' | escape }}">
@@ -37,56 +50,90 @@
         {%- for r in reels limit: limit -%}
           {%- if r.v == blank -%}{%- continue -%}{%- endif -%}
           <div class="vr__card" data-i="{{ n }}" role="group" aria-roledescription="slide" aria-label="{{ n | plus: 1 }} / {{ reels.size }}">
-            <video
-              class="vr__video"
-              src="{{ r.v }}"
-              {% if r.p != blank %}poster="{{ r.p }}"{% endif %}
-              muted
-              playsinline
-              preload="{% if n < 3 %}metadata{% else %}none{% endif %}"
-            ></video>
-            <span class="vr__shade" aria-hidden="true"></span>
-            <div class="vr__bar">
-              <span class="vr__progress"><span></span></span>
-            </div>
-            <div class="vr__controls">
-              <button type="button" class="vr__ctrl vr__ctrl--play" aria-label="{{ 'reels.pause' | t }}">
-                <svg class="i-pause" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor"/></svg>
-                <svg class="i-play" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M8 5.5v13l11-6.5-11-6.5z" fill="currentColor"/></svg>
+            <div class="vr__frame">
+              <video
+                class="vr__video"
+                src="{{ r.v }}"
+                {% if r.p != blank %}poster="{{ r.p }}"{% endif %}
+                muted
+                playsinline
+                preload="{% if n < 2 %}auto{% else %}none{% endif %}"
+              ></video>
+              <span class="vr__shade" aria-hidden="true"></span>
+
+              <div class="vr__top">
+                <span class="vr__progress" aria-hidden="true"><span></span></span>
+                <div class="vr__chips">
+                  {%- if r.pin -%}
+                    <span class="vr__chip vr__chip--pin">
+                      <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M15 3l6 6-3 1-4 4 .5 4.5L13 20l-3.5-3.5L4 22l-.5-.5L9 16l-3.5-3.5L7 11l4.5.5 4-4 1-3z" fill="currentColor"/></svg>
+                      {{ 'reels.pinned' | t }}
+                    </span>
+                  {%- endif -%}
+                  <span class="vr__chip vr__chip--preview">{{ 'reels.preview' | t }}</span>
+                </div>
+              </div>
+
+              <button type="button" class="vr__big" aria-label="{{ 'reels.watch' | t }}">
+                <span class="vr__big-circle">
+                  <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path d="M8 5.5v13l11-6.5-11-6.5z" fill="currentColor"/></svg>
+                </span>
+                <span class="vr__big-label">{{ 'reels.watch' | t }}</span>
               </button>
-              <button type="button" class="vr__ctrl vr__ctrl--sound" aria-label="{{ 'reels.unmute' | t }}">
-                <svg class="i-muted" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path d="M16 9l5 6M21 9l-5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-                <svg class="i-sound" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-              </button>
+
+              {%- if block.settings.show_caption and r.c != blank -%}
+                <p class="vr__caption"><span>{{ r.c | escape }}</span></p>
+              {%- endif -%}
+
+              <div class="vr__controls">
+                <button type="button" class="vr__ctrl vr__ctrl--play" aria-label="{{ 'reels.pause' | t }}">
+                  <svg class="i-pause" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor"/></svg>
+                  <svg class="i-play" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M8 5.5v13l11-6.5-11-6.5z" fill="currentColor"/></svg>
+                </button>
+                <button type="button" class="vr__ctrl vr__ctrl--sound" aria-label="{{ 'reels.unmute' | t }}">
+                  <svg class="i-muted" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path d="M16 9l5 6M21 9l-5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                  <svg class="i-sound" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                </button>
+                {%- if block.settings.show_link and r.l != blank -%}
+                  <a class="vr__ctrl vr__ig" href="{{ r.l }}" target="_blank" rel="noopener" aria-label="{{ 'reels.view_on_instagram' | t }}">
+                    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="17.4" cy="6.6" r="1.2" fill="currentColor"/></svg>
+                  </a>
+                {%- endif -%}
+                <button type="button" class="vr__ctrl vr__ctrl--close" aria-label="{{ 'reels.close' | t }}">
+                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+                </button>
+              </div>
+
+              <button type="button" class="vr__pick" aria-label="{{ 'reels.show' | t }} {{ n | plus: 1 }}"></button>
             </div>
-            {%- if block.settings.show_caption and r.c != blank -%}
-              <p class="vr__caption">{{ r.c | escape }}</p>
-            {%- endif -%}
-            {%- if block.settings.show_link and r.l != blank -%}
-              <a class="vr__ig" href="{{ r.l }}" target="_blank" rel="noopener" aria-label="{{ 'reels.view_on_instagram' | t }}">
-                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="17.4" cy="6.6" r="1.2" fill="currentColor"/></svg>
-              </a>
-            {%- endif -%}
-            <button type="button" class="vr__pick" aria-label="{{ 'reels.play' | t }} {{ n | plus: 1 }}"></button>
           </div>
           {%- assign n = n | plus: 1 -%}
         {%- endfor -%}
 
         <button type="button" class="vr__nav vr__nav--prev" aria-label="{{ 'reels.previous' | t }}">
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
         <button type="button" class="vr__nav vr__nav--next" aria-label="{{ 'reels.next' | t }}">
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
       </div>
 
-      {%- if block.settings.show_dots -%}
-        <div class="vr__dots" role="tablist" aria-label="{{ 'reels.choose' | t }}"></div>
-      {%- endif -%}
+      <div class="vr__below">
+        <button type="button" class="vr__auto" aria-label="{{ 'reels.pause_slideshow' | t }}" aria-pressed="false">
+          <svg class="i-pause" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor"/></svg>
+          <svg class="i-play" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 5.5v13l11-6.5-11-6.5z" fill="currentColor"/></svg>
+        </button>
+        {%- if block.settings.show_dots -%}
+          <div class="vr__dots" role="tablist" aria-label="{{ 'reels.choose' | t }}"></div>
+        {%- endif -%}
+      </div>
 
-      {%- if block.settings.button_label != blank and block.settings.button_link != blank -%}
+      {%- if block.settings.button_label != blank and follow_link != blank -%}
         <div class="vr__cta">
-          <a class="vr__button" href="{{ block.settings.button_link }}" target="_blank" rel="noopener">{{ block.settings.button_label }}</a>
+          <a class="vr__button" href="{{ follow_link }}" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="17.4" cy="6.6" r="1.2" fill="currentColor"/></svg>
+            <span>{{ block.settings.button_label }}{% if handle != blank and block.settings.show_handle %} <strong>@{{ handle }}</strong>{% endif %}</span>
+          </a>
         </div>
       {%- endif -%}
     {%- elsif request.design_mode -%}
@@ -103,31 +150,51 @@
   "target": "section",
   "settings": [
     { "type": "header", "content": "Heading" },
-    { "type": "text", "id": "eyebrow", "label": "Small text above heading", "default": "On Instagram" },
+    { "type": "text", "id": "eyebrow", "label": "Small text above heading", "default": "Follow along" },
     { "type": "text", "id": "heading", "label": "Heading", "default": "Watch our reels" },
     { "type": "richtext", "id": "subheading", "label": "Text under heading" },
     { "type": "header", "content": "Reels" },
-    { "type": "range", "id": "max_reels", "label": "Reels to show", "min": 3, "max": 20, "step": 1, "default": 12 },
+    { "type": "range", "id": "max_reels", "label": "Reels to show (most)", "min": 3, "max": 20, "step": 1, "default": 10 },
+    { "type": "range", "id": "preview_seconds", "label": "Preview length before moving on", "min": 2, "max": 8, "step": 1, "unit": "s", "default": 4 },
+    { "type": "checkbox", "id": "auto_advance", "label": "Move to the next reel automatically", "default": true },
+    { "type": "checkbox", "id": "show_caption", "label": "Show caption", "default": true },
+    { "type": "checkbox", "id": "show_link", "label": "Show Instagram link while watching", "default": true },
+    { "type": "checkbox", "id": "show_dots", "label": "Show dots under the reels", "default": true },
+    { "type": "header", "content": "Look" },
+    {
+      "type": "select", "id": "style", "label": "Background style", "default": "glow",
+      "options": [
+        { "value": "glow", "label": "Soft glow" },
+        { "value": "dark", "label": "Dark" },
+        { "value": "plain", "label": "Same as theme" },
+        { "value": "custom", "label": "Custom color" }
+      ]
+    },
+    { "type": "color", "id": "background", "label": "Custom background color" },
+    {
+      "type": "select", "id": "ring", "label": "Ring around the centre reel", "default": "instagram",
+      "options": [
+        { "value": "instagram", "label": "Instagram colors" },
+        { "value": "accent", "label": "Accent color" },
+        { "value": "none", "label": "None" }
+      ]
+    },
     { "type": "range", "id": "card_width", "label": "Centre reel width", "min": 220, "max": 380, "step": 10, "unit": "px", "default": 300 },
     { "type": "range", "id": "side_scale", "label": "Side reels size", "min": 60, "max": 95, "step": 5, "unit": "%", "default": 80 },
     {
       "type": "select", "id": "sides", "label": "Reels shown on each side (desktop)", "default": "2",
       "options": [{ "value": "1", "label": "1" }, { "value": "2", "label": "2" }]
     },
-    { "type": "range", "id": "radius", "label": "Rounded corners", "min": 0, "max": 30, "step": 2, "unit": "px", "default": 18 },
-    { "type": "checkbox", "id": "auto_advance", "label": "Move to the next reel when one ends", "default": true },
-    { "type": "checkbox", "id": "show_dots", "label": "Show dots under the reels", "default": true },
-    { "type": "checkbox", "id": "show_caption", "label": "Show caption on the centre reel", "default": false },
-    { "type": "checkbox", "id": "show_link", "label": "Show Instagram link on the centre reel", "default": true },
+    { "type": "range", "id": "radius", "label": "Rounded corners", "min": 0, "max": 30, "step": 2, "unit": "px", "default": 22 },
     { "type": "header", "content": "Button" },
     { "type": "text", "id": "button_label", "label": "Button label", "default": "Follow us on Instagram" },
-    { "type": "url", "id": "button_link", "label": "Button link" },
+    { "type": "checkbox", "id": "show_handle", "label": "Add @username to the button", "default": false },
+    { "type": "url", "id": "button_link", "label": "Button link", "info": "Leave empty to link to your Instagram profile." },
     { "type": "header", "content": "Colors and spacing" },
-    { "type": "color", "id": "heading_color", "label": "Heading", "default": "#1f1f1f" },
-    { "type": "color", "id": "text_color", "label": "Text", "default": "#555555" },
-    { "type": "color", "id": "accent", "label": "Accent (arrows, dots, button)", "default": "#111111" },
-    { "type": "color", "id": "background", "label": "Background (leave empty for none)" },
-    { "type": "range", "id": "padding", "label": "Top and bottom space", "min": 0, "max": 100, "step": 4, "unit": "px", "default": 48 }
+    { "type": "color", "id": "accent", "label": "Accent (arrows, dots)", "default": "#111111" },
+    { "type": "color", "id": "heading_color", "label": "Heading color", "info": "Leave empty to match the background style." },
+    { "type": "color", "id": "text_color", "label": "Text color", "info": "Leave empty to match the background style." },
+    { "type": "range", "id": "padding", "label": "Top and bottom space", "min": 0, "max": 120, "step": 4, "unit": "px", "default": 64 }
   ]
 }
 {% endschema %}

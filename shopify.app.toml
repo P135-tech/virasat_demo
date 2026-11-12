@@ -35,5 +35,4 @@ redirect_urls = [ "https://reelstage.onrender.com/api/auth" ]
 embedded = false
 
 [build]
-include_config_on_deploy = true
 automatically_update_urls_on_dev = false

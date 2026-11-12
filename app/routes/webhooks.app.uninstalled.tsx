@@ -14,6 +14,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   // into the store's Shopify Files stay there (they belong to the merchant).
   await db.instagramAccount.deleteMany({ where: { shop } });
   await db.selectedReel.deleteMany({ where: { shop } });
+  await db.reelSettings.deleteMany({ where: { shop } });
 
   return new Response();
 };
