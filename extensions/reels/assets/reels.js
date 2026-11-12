@@ -22,7 +22,7 @@
     var soundOn = true;        // sound in watch mode (shopper can mute)
     var userPaused = false;    // paused in watch mode
     var slideshowOff = !advance;
-    var hovering = false;
+    var startedAt = 0;        // when the current preview started (wall clock)
     var inView = false;
     var raf = 0;
 
@@ -127,6 +127,7 @@
       v.loop = false;
       try { v.currentTime = 0; } catch (e) {}
       if (!inView || reduce) { v.pause(); cancelAnimationFrame(raf); return; }
+      startedAt = Date.now();
       safePlay(v, card);
       loop();
     }
@@ -169,8 +170,10 @@
         } else {
           var len = dur ? Math.min(previewLen, Math.max(0.5, dur - 0.15)) : previewLen;
           if (bar) bar.style.width = Math.min(100, (v.currentTime / len) * 100) + '%';
-          if (v.currentTime >= len) {
-            if (!slideshowOff && !hovering && n > 1) { go(active + 1); return; }
+          // move on when the preview has played, or if the video is slow to load (never get stuck)
+          var waited = (Date.now() - startedAt) / 1000;
+          if (v.currentTime >= len || waited >= len + 3) {
+            if (!slideshowOff && n > 1) { go(active + 1); return; }
             // holding on this reel: keep the preview looping
             if (v.currentTime >= len + 0.05) { try { v.currentTime = 0; } catch (e) {} }
           }
@@ -241,9 +244,6 @@
       autoBtn.setAttribute('aria-pressed', slideshowOff ? 'true' : 'false');
     });
 
-    // hovering the centre reel holds it in place (desktop)
-    stage.addEventListener('mouseenter', function () { hovering = true; });
-    stage.addEventListener('mouseleave', function () { hovering = false; });
 
     root.addEventListener('keydown', function (e) {
       if (e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
