@@ -7,7 +7,8 @@ export type Admin = {
   graphql: (query: string, options?: { variables?: Record<string, unknown> }) => Promise<Response>;
 };
 
-export const MAX_REELS = 20;
+import { MAX_REELS } from "./constants";
+export { MAX_REELS };
 
 async function gql<T>(admin: Admin, query: string, variables?: Record<string, unknown>): Promise<T> {
   const res = await admin.graphql(query, variables ? { variables } : undefined);

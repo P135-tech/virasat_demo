@@ -6,7 +6,8 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { authorizeUrl, disconnect, listReels, type Reel } from "../lib/instagram.server";
-import { MAX_REELS, publishToStore, processPending, refreshStatuses, resumeIfStuck, saveSelection, type Admin } from "../lib/reels.server";
+import { publishToStore, processPending, refreshStatuses, resumeIfStuck, saveSelection, type Admin } from "../lib/reels.server";
+import { MAX_REELS } from "../lib/constants";
 import { themeSupportsAppBlocks } from "../lib/theme.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
