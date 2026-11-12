@@ -193,6 +193,15 @@
         else startPreview();
       });
       v.addEventListener('error', function () {
+        // Instagram's video address expired: switch to the app's always-current address once
+        var fb = v.getAttribute('data-fallback');
+        if (fb && !v.__fb) {
+          v.__fb = true;
+          v.poster = fb + '?poster=1';
+          v.src = fb;
+          if (i === active && inView) safePlay(v, c);
+          return;
+        }
         if (i === active && !full && !slideshowOff && n > 1) setTimeout(function () { if (i === active) go(active + 1); }, 800);
       });
       var pick = c.querySelector('.vr__pick');

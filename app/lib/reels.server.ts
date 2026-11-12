@@ -29,6 +29,11 @@ function shortCaption(c: string | null | undefined, n = 120) {
  */
 async function uploadToFiles(admin: Admin, shop: string, mediaId: string) {
   const reel = await getReel(shop, mediaId);
+
+  // Already copied before (e.g. chosen, removed, chosen again)? Reuse it instead of uploading again.
+  const existing = await findExistingFile(admin, mediaId);
+  if (existing) return { fileId: existing, reel };
+
   if (!reel.mediaUrl) throw new Error("Instagram did not share the video file for this reel.");
 
   const videoRes = await fetch(reel.mediaUrl);
@@ -82,6 +87,70 @@ async function uploadToFiles(admin: Admin, shop: string, mediaId: string) {
   return { fileId: created.fileCreate.files[0].id, reel };
 }
 
+async function findExistingFile(admin: Admin, mediaId: string): Promise<string | null> {
+  try {
+    const data = await gql<{ files: { nodes: { id: string; fileStatus?: string }[] } }>(
+      admin,
+      `#graphql
+      query Find($q: String!) {
+        files(first: 5, query: $q) { nodes { id fileStatus } }
+      }`,
+      { q: `filename:instagram-reel-${mediaId}` },
+    );
+    const ok = data.files.nodes.find((n) => n.id.includes("/Video/") && n.fileStatus !== "FAILED");
+    return ok?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Address on this app that always sends the browser to the reel's current Instagram video (or ?poster=1 image). */
+export function instagramLink(shop: string, mediaId: string) {
+  const base = (process.env.SHOPIFY_APP_URL || "").replace(/\/$/, "");
+  return `${base}/reel/${encodeURIComponent(shop)}/${encodeURIComponent(mediaId)}`;
+}
+
+/**
+ * When Shopify won't take the video (e.g. the plan's weekly video upload limit), the reel is played straight
+ * from Instagram instead. Instagram's video addresses change over time, so the storefront also gets a
+ * fallback address on this app that always points to the current one.
+ */
+async function useInstagramDirect(shop: string, rowId: string, mediaId: string, note: string) {
+  let videoUrl: string | null = null;
+  let posterUrl: string | null = null;
+  try {
+    const r = await getReel(shop, mediaId);
+    videoUrl = r.mediaUrl;
+    posterUrl = r.thumbnail;
+  } catch {
+    /* the fallback address still works later */
+  }
+  console.warn(`Reel ${mediaId} for ${shop} plays from Instagram: ${note}`);
+  await db.selectedReel.update({
+    where: { id: rowId },
+    data: { status: "ready", fileId: null, videoUrl: videoUrl ?? instagramLink(shop, mediaId), posterUrl, error: null },
+  });
+}
+
+/** Instagram-hosted reels: get fresh video addresses (they expire) when the app is opened. */
+export async function refreshInstagramLinks(shop: string) {
+  const old = await db.selectedReel.findMany({
+    where: { shop, status: "ready", fileId: null, updatedAt: { lt: new Date(Date.now() - 6 * 3600 * 1000) } },
+  });
+  for (const r of old) {
+    try {
+      const fresh = await getReel(shop, r.mediaId);
+      await db.selectedReel.update({
+        where: { id: r.id },
+        data: { videoUrl: fresh.mediaUrl ?? r.videoUrl, posterUrl: fresh.thumbnail ?? r.posterUrl },
+      });
+    } catch {
+      /* keep the old address; the fallback address covers it */
+    }
+  }
+  return old.length > 0;
+}
+
 // One copy job per store at a time (a second Save while copying just joins the running job).
 const running = new Set<string>();
 
@@ -103,10 +172,7 @@ export function processPending(shop: string) {
             data: { fileId, caption: reel.caption, permalink: reel.permalink, error: null },
           });
         } catch (e) {
-          await db.selectedReel.update({
-            where: { id: r.id },
-            data: { status: "failed", error: e instanceof Error ? e.message : String(e) },
-          });
+          await useInstagramDirect(shop, r.id, r.mediaId, e instanceof Error ? e.message : String(e));
         }
       }
       }
@@ -176,10 +242,7 @@ export async function refreshStatuses(admin: Admin, shop: string) {
           data: { status: "ready", videoUrl: mp4?.url ?? node.sources?.[0]?.url ?? null, posterUrl: node.preview?.image?.url ?? null },
         });
       } else if (node.fileStatus === "FAILED") {
-        await db.selectedReel.update({
-          where: { id: row.id },
-          data: { status: "failed", error: node.fileErrors?.[0]?.message || "Shopify could not process this video." },
-        });
+        await useInstagramDirect(shop, row.id, row.mediaId, node.fileErrors?.[0]?.message || "Shopify could not process this video.");
       }
     }
   }
@@ -195,6 +258,7 @@ export async function publishToStore(admin: Admin, shop: string) {
     l: r.permalink,
     c: shortCaption(r.caption),
     pin: r.pinned,
+    f: r.fileId ? "" : instagramLink(shop, r.mediaId),
   }));
   const acc = await db.instagramAccount.findUnique({ where: { shop } });
   const profile = { u: acc?.username || "" };

@@ -54,6 +54,7 @@
                 class="vr__video"
                 src="{{ r.v }}"
                 {% if r.p != blank %}poster="{{ r.p }}"{% endif %}
+                {% if r.f != blank %}data-fallback="{{ r.f }}"{% endif %}
                 muted
                 playsinline
                 preload="{% if n < 2 %}auto{% else %}none{% endif %}"

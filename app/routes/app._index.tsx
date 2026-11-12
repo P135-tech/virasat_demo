@@ -6,7 +6,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { authorizeUrl, disconnect, listReels, type Reel } from "../lib/instagram.server";
-import { publishToStore, processPending, refreshStatuses, resumeIfStuck, saveSelection, type Admin } from "../lib/reels.server";
+import { publishToStore, processPending, refreshInstagramLinks, refreshStatuses, resumeIfStuck, saveSelection, type Admin } from "../lib/reels.server";
 import { LIST_COUNT, MAX_REELS } from "../lib/constants";
 import { themeSupportsAppBlocks } from "../lib/theme.server";
 
@@ -34,6 +34,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       igError = e instanceof Error ? e.message : String(e);
     }
     try {
+      await refreshInstagramLinks(shop);
       await refreshStatuses(admin as unknown as Admin, shop);
       await resumeIfStuck(shop);
     } catch (e) {
@@ -60,6 +61,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       caption: s.caption,
       image: s.posterUrl || s.igThumbnail,
       permalink: s.permalink,
+      fromInstagram: s.status === "ready" && !s.fileId,
     })),
   };
 };
@@ -254,6 +256,7 @@ export default function Reels() {
                   {s.image ? <img src={s.image} alt="" style={thumb} /> : <div style={thumb} />}
                   <div style={{ padding: 8, display: "grid", gap: 6 }}>
                     {s.status === "ready" && <s-badge tone="success">On store</s-badge>}
+                    {s.fromInstagram && <s-text color="subdued">Plays from Instagram</s-text>}
                     {s.status === "processing" && <s-badge tone="info">Copying…</s-badge>}
                     {s.status === "failed" && <s-badge tone="critical">Failed</s-badge>}
                     {s.error && <s-text color="subdued">{s.error}</s-text>}

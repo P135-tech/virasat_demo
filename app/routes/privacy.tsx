@@ -44,7 +44,7 @@ export default function Privacy() {
       <h2 style={h2}>How we use it</h2>
       <ul>
         <li>To list the merchant’s reels in the app so they can choose which ones to show.</li>
-        <li>To copy the chosen reels into the merchant’s own Shopify Files and show them on the merchant’s store.</li>
+        <li>To copy the chosen reels into the merchant’s own Shopify Files and show them on the merchant’s store. If Shopify can’t store a video (for example because of the store plan’s upload limit), the reel is played directly from Instagram instead.</li>
         <li>We never sell, rent or share this information, and never use it for advertising.</li>
       </ul>
 
