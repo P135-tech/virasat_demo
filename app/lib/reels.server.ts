@@ -306,3 +306,22 @@ export async function saveSelection(
   await publishToStore(admin, shop);
   processPending(shop);
 }
+
+/**
+ * A reinstall must start fresh, even if Shopify's "app uninstalled" message was missed or is late.
+ * Each install has its own id; data saved under a previous install is forgotten.
+ */
+export async function forgetOldInstall(admin: Admin, shop: string) {
+  const acc = await db.instagramAccount.findUnique({ where: { shop } });
+  if (!acc) return;
+  const data = await gql<{ currentAppInstallation: { id: string } }>(admin, `#graphql
+    query { currentAppInstallation { id } }`);
+  const id = data.currentAppInstallation.id;
+  if (acc.installId && acc.installId !== id) {
+    await db.instagramAccount.deleteMany({ where: { shop } });
+    await db.selectedReel.deleteMany({ where: { shop } });
+    await db.reelSettings.deleteMany({ where: { shop } });
+    return;
+  }
+  if (!acc.installId) await db.instagramAccount.update({ where: { shop }, data: { installId: id } });
+}

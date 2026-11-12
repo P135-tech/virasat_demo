@@ -6,7 +6,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { authorizeUrl, disconnect, listReels, type Reel } from "../lib/instagram.server";
-import { publishToStore, processPending, refreshInstagramLinks, refreshStatuses, resumeIfStuck, saveSelection, type Admin } from "../lib/reels.server";
+import { forgetOldInstall, publishToStore, processPending, refreshInstagramLinks, refreshStatuses, resumeIfStuck, saveSelection, type Admin } from "../lib/reels.server";
 import { LIST_COUNT, MAX_REELS } from "../lib/constants";
 import { themeSupportsAppBlocks } from "../lib/theme.server";
 
@@ -23,6 +23,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     setupError = e instanceof Error ? e.message : String(e);
   }
 
+  try {
+    await forgetOldInstall(admin as unknown as Admin, shop);
+  } catch (e) {
+    console.error("forgetOldInstall", e);
+  }
   const account = await db.instagramAccount.findUnique({ where: { shop } });
   let reels: Reel[] = [];
   let igError: string | null = null;

@@ -12,8 +12,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
   // Forget the merchant's Instagram login straight away. The reels already copied
   // into the store's Shopify Files stay there (they belong to the merchant).
-  await db.instagramAccount.deleteMany({ where: { shop } });
-  await db.selectedReel.deleteMany({ where: { shop } });
+  // A late message must not wipe a newer install: only remove what was saved before the uninstall.
+  const at = Date.parse(request.headers.get("x-shopify-triggered-at") || "");
+  const before = Number.isNaN(at) ? new Date() : new Date(at);
+  await db.instagramAccount.deleteMany({ where: { shop, connectedAt: { lt: before } } });
+  await db.selectedReel.deleteMany({ where: { shop, createdAt: { lt: before } } });
   await db.reelSettings.deleteMany({ where: { shop } });
 
   return new Response();

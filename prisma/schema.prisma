@@ -34,6 +34,7 @@ model InstagramAccount {
   igUserId       String
   fbUserId       String? // app-scoped Facebook user id (Meta's deauthorize / data-deletion requests use it)
   pageId         String? // Facebook Page linked to the Instagram account
+  installId      String? // Shopify app installation this connection belongs to (a reinstall gets a new id)
   username       String
   accountType    String?
   accessToken    String // encrypted (AES-256-GCM) with TOKEN_ENCRYPTION_KEY
