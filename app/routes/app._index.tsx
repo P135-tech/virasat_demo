@@ -183,6 +183,7 @@ export default function Reels() {
 
   const savedIds = useMemo(() => d.selected.map((s) => s.mediaId), [d.selected]);
   const [chosen, setChosen] = useState<string[]>(savedIds);
+  const [showAll, setShowAll] = useState(false);
   useEffect(() => setChosen(savedIds), [savedIds]);
   const dirty = chosen.join(",") !== savedIds.join(",");
 
@@ -337,7 +338,7 @@ export default function Reels() {
         </s-stack>
       </s-section>
 
-      <s-section heading={`On your store (${shownCount} of ${d.selected.length} ready)`}>
+      <s-section heading={auto ? `Shown on your store: ${d.selected.length} reels, pinned first (${shownCount} ready)` : `On your store (${shownCount} of ${d.selected.length} ready)`}>
         <s-stack gap="base">
           {d.selected.length === 0 ? (
             <s-paragraph>{auto ? "No reels found yet." : "No reels chosen yet. Tick reels below and click Save."}</s-paragraph>
@@ -393,7 +394,23 @@ export default function Reels() {
         </s-stack>
       </s-section>
 
-      <s-section heading={auto ? "Your Instagram reels" : `Your Instagram reels (${chosen.length} of ${MAX_REELS} chosen)`}>
+      {auto && !showAll && (
+        <s-section heading="Pin a different reel">
+          <s-stack gap="base">
+            <s-paragraph>
+              <s-text color="subdued">
+                Only the {d.settings.count} reels above are shown on your store. Want another reel first? Open your other reels
+                and pin it.
+              </s-text>
+            </s-paragraph>
+            <s-stack direction="inline">
+              <s-button onClick={() => setShowAll(true)}>Show my other reels</s-button>
+            </s-stack>
+          </s-stack>
+        </s-section>
+      )}
+      {(!auto || showAll) && (
+      <s-section heading={auto ? "All your Instagram reels (pin one to show it first)" : `Your Instagram reels (${chosen.length} of ${MAX_REELS} chosen)`}>
         <s-stack gap="base">
           {d.igError && <s-banner tone="critical">{d.igError}</s-banner>}
           {!d.igError && d.reels.length === 0 && <s-paragraph>No reels found on @{d.account.username} yet.</s-paragraph>}
@@ -459,8 +476,14 @@ export default function Reels() {
               {dirty && <s-text color="subdued">You have unsaved changes.</s-text>}
             </s-stack>
           )}
+          {auto && (
+            <s-stack direction="inline">
+              <s-button onClick={() => setShowAll(false)}>Hide</s-button>
+            </s-stack>
+          )}
         </s-stack>
       </s-section>
+      )}
     </s-page>
   );
 }
