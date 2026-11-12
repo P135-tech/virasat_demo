@@ -261,7 +261,8 @@ export async function publishToStore(admin: Admin, shop: string) {
     f: r.fileId ? "" : instagramLink(shop, r.mediaId),
   }));
   const acc = await db.instagramAccount.findUnique({ where: { shop } });
-  const profile = { u: acc?.username || "" };
+  const settings = await db.reelSettings.findUnique({ where: { shop } });
+  const profile = { u: acc?.username || "", layout: settings?.layout === "strip" ? "strip" : "stage" };
   const inst = await gql<{ currentAppInstallation: { id: string } }>(admin, `#graphql
     query { currentAppInstallation { id } }`);
   const res = await gql<{ metafieldsSet: { userErrors: { message: string }[] } }>(
@@ -324,4 +325,13 @@ export async function forgetOldInstall(admin: Admin, shop: string) {
     return;
   }
   if (!acc.installId) await db.instagramAccount.update({ where: { shop }, data: { installId: id } });
+}
+
+export const LAYOUTS = ["stage", "strip"] as const;
+
+/** Saves the storefront layout and updates the store straight away. */
+export async function setLayout(admin: Admin, shop: string, layout: string) {
+  const value = layout === "strip" ? "strip" : "stage";
+  await db.reelSettings.upsert({ where: { shop }, create: { shop, layout: value }, update: { layout: value } });
+  await publishToStore(admin, shop);
 }

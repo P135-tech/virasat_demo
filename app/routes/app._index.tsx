@@ -6,7 +6,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { authorizeUrl, disconnect, listReels, type Reel } from "../lib/instagram.server";
-import { forgetOldInstall, publishToStore, processPending, refreshInstagramLinks, refreshStatuses, resumeIfStuck, saveSelection, type Admin } from "../lib/reels.server";
+import { forgetOldInstall, setLayout, publishToStore, processPending, refreshInstagramLinks, refreshStatuses, resumeIfStuck, saveSelection, type Admin } from "../lib/reels.server";
 import { LIST_COUNT, MAX_REELS } from "../lib/constants";
 import { themeSupportsAppBlocks } from "../lib/theme.server";
 
@@ -47,6 +47,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
   }
   const theme = await themeSupportsAppBlocks(admin as unknown as Admin);
+  const layout = (await db.reelSettings.findUnique({ where: { shop } }))?.layout === "strip" ? "strip" : "stage";
   const selected = await db.selectedReel.findMany({ where: { shop }, orderBy: { position: "asc" } });
 
   return {
@@ -59,6 +60,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     reels,
     igError,
     theme,
+    layout,
     selected: selected.map((s) => ({
       mediaId: s.mediaId,
       status: s.status,
@@ -78,6 +80,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const intent = String(fd.get("intent"));
   const a = admin as unknown as Admin;
   try {
+    if (intent === "layout") {
+      await setLayout(a, shop, String(fd.get("layout")));
+      return { ok: true, message: "Layout saved. Refresh your store to see it." };
+    }
     if (intent === "save") {
       const chosen = JSON.parse(String(fd.get("chosen") || "[]")) as {
         id: string;
@@ -250,6 +256,45 @@ export default function Reels() {
         </s-stack>
       </s-section>
 
+      <s-section heading="Layout on your store">
+        <s-stack gap="base">
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 14 }}>
+            {LAYOUT_CHOICES.map((l) => {
+              const on = d.layout === l.id;
+              return (
+                <button
+                  key={l.id}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => !on && post({ intent: "layout", layout: l.id })}
+                  aria-pressed={on}
+                  style={{
+                    flex: "1 1 260px", maxWidth: 380, textAlign: "left", padding: 14, borderRadius: 14, cursor: on ? "default" : "pointer",
+                    font: "inherit", background: on ? "#f6f6f7" : "#fff", border: on ? "2px solid #111" : "1px solid #d4d4d4",
+                  }}
+                >
+                  <LayoutPicture kind={l.id} />
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, fontWeight: 700 }}>
+                    <span style={{ width: 16, height: 16, borderRadius: "50%", border: "2px solid #111", display: "grid", placeItems: "center" }}>
+                      {on && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#111" }} />}
+                    </span>
+                    {l.name}
+                    {on && <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 600, color: "#0a7d35" }}>In use</span>}
+                  </div>
+                  <div style={{ color: "#616161", fontSize: 13, marginTop: 4 }}>{l.text}</div>
+                </button>
+              );
+            })}
+          </div>
+          <s-paragraph>
+            <s-text color="subdued">
+              Both layouts play a short preview of the centre reel, then move to the next one. Shoppers press play to watch the
+              full reel. You can also change the layout per page in the theme editor.
+            </s-text>
+          </s-paragraph>
+        </s-stack>
+      </s-section>
+
       <s-section heading={`On your store (${shownCount} of ${d.selected.length} ready)`}>
         <s-stack gap="base">
           {d.selected.length === 0 ? (
@@ -352,6 +397,49 @@ export default function Reels() {
         </s-stack>
       </s-section>
     </s-page>
+  );
+}
+
+const LAYOUT_CHOICES = [
+  { id: "stage", name: "Centre stage", text: "The playing reel in the middle, smaller tilted reels on each side." },
+  { id: "strip", name: "Strip", text: "A row of reel thumbnails; the playing reel in the middle is taller." },
+] as const;
+
+/** Small drawing of each layout for the picker. */
+function LayoutPicture({ kind }: { kind: "stage" | "strip" }) {
+  const box: CSSProperties = { display: "block", width: "100%", height: 120, borderRadius: 10, background: "#efeaf6" };
+  if (kind === "stage") {
+    return (
+      <svg viewBox="0 0 300 120" style={box} aria-hidden="true">
+        <rect x="38" y="30" width="44" height="72" rx="8" fill="#b9a9d6" transform="skewY(4)" opacity=".75" />
+        <rect x="80" y="22" width="52" height="84" rx="9" fill="#a08cc8" />
+        <rect x="218" y="30" width="44" height="72" rx="8" fill="#b9a9d6" transform="skewY(-4)" opacity=".75" />
+        <rect x="168" y="22" width="52" height="84" rx="9" fill="#a08cc8" />
+        <rect x="120" y="8" width="60" height="106" rx="10" fill="url(#g1)" stroke="#d62976" strokeWidth="3" />
+        <path d="M144 52 L162 61 L144 70 Z" fill="#fff" />
+        <defs>
+          <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor="#ffc15e" />
+            <stop offset="1" stopColor="#f0457a" />
+          </linearGradient>
+        </defs>
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 300 120" style={box} aria-hidden="true">
+      {[-3, -2, -1, 1, 2, 3].map((k) => (
+        <rect key={k} x={150 + k * 46 - 20 + (k > 0 ? 6 : -6)} y="22" width="40" height="76" rx="7" fill="#a08cc8" />
+      ))}
+      <rect x="122" y="8" width="56" height="104" rx="9" fill="url(#g2)" stroke="#d62976" strokeWidth="3" />
+      <path d="M144 52 L162 61 L144 70 Z" fill="#fff" />
+      <defs>
+        <linearGradient id="g2" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#ffc15e" />
+          <stop offset="1" stopColor="#f0457a" />
+        </linearGradient>
+      </defs>
+    </svg>
   );
 }
 

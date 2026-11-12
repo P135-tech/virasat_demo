@@ -190,3 +190,23 @@
   .vr__card { transition: opacity .2s; }
   .vr__card::before, .vr__big-circle::after { animation: none; }
 }
+
+/* ---------- Strip layout: a row of thumbnails, the centre one taller and playing ---------- */
+.vr--layout-strip { --vr-strip-scale: .78; }
+.vr--layout-strip .vr__stage { perspective: none; }
+.vr--layout-strip .vr__card { transition: transform .6s cubic-bezier(.25, .8, .25, 1), opacity .4s ease; }
+.vr--layout-strip .vr__shade { background: rgba(10, 8, 14, .12); }
+.vr--layout-strip .vr__card:not(.is-active):hover .vr__shade { opacity: 0; }
+.vr--layout-strip .vr__card:not(.is-active) .vr__frame { box-shadow: 0 6px 18px rgba(0, 0, 0, .12); }
+.vr--layout-strip.is-watching .vr__card:not(.is-active) .vr__shade { background: rgba(10, 8, 14, .45); }
+/* little play mark on the waiting thumbnails */
+.vr__thumbmark { display: none; }
+.vr--layout-strip .vr__card:not(.is-active) .vr__thumbmark {
+  position: absolute; top: 10px; right: 10px; z-index: 2; display: grid; place-items: center; width: 28px; height: 28px;
+  border-radius: 50%; background: rgba(0, 0, 0, .35); color: #fff; backdrop-filter: blur(4px); pointer-events: none;
+}
+.vr--layout-strip .vr__nav--prev { left: max(8px, calc(50% - var(--vr-card) / 2 - 25px)); }
+.vr--layout-strip .vr__nav--next { right: max(8px, calc(50% - var(--vr-card) / 2 - 25px)); }
+@media (max-width: 749px) {
+  .vr--layout-strip { --vr-card-m: min(var(--vr-card), 58vw); }
+}

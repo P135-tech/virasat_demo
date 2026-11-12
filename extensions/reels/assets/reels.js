@@ -16,6 +16,7 @@
     var advance = root.getAttribute('data-advance') !== 'false' && !reduce;
     var previewLen = Math.max(1, Number(root.getAttribute('data-preview')) || 4);
     var sidesWanted = Number(root.getAttribute('data-sides')) || 2;
+    var strip = root.getAttribute('data-layout') === 'strip';
 
     var active = 0;
     var full = false;          // watching the whole reel
@@ -55,6 +56,18 @@
       return d;
     }
 
+    /* Strip layout: a straight row of thumbnails; the centre one is taller and plays.
+       As many thumbnails as fit across the screen are shown. */
+    function stripPos(a, w) {
+      var small = parseFloat(getComputedStyle(root).getPropertyValue('--vr-strip-scale')) || 0.78;
+      var gap = Math.max(10, w * 0.05);
+      var s = a === 0 ? 1 : small;
+      var x = a === 0 ? 0 : w / 2 + gap + (w * small) / 2 + (a - 1) * (w * small + gap);
+      var half = stage.clientWidth / 2;
+      var fit = Math.ceil((half - w / 2) / (w * small + gap)) ;
+      return { s: s, x: x, hidden: a > Math.max(1, Math.min(fit, Math.floor(n / 2))) };
+    }
+
     function layout() {
       var w = cards[0].offsetWidth;
       var sideScale = parseFloat(getComputedStyle(root).getPropertyValue('--vr-side-scale')) || 0.8;
@@ -62,15 +75,21 @@
       cards.forEach(function (c, i) {
         var d = offset(i);
         var a = Math.abs(d);
-        var s = a === 0 ? (full ? 1.03 : 1) : Math.pow(sideScale, a);
-        var x = 0;
-        for (var k = 1; k <= a; k++) x += w * (Math.pow(sideScale, k - 1) + Math.pow(sideScale, k)) / 2 * 0.82;
-        if (full && a > 0) x += w * 0.06;
+        var s, x = 0, hidden, r = 0;
+        if (strip) {
+          var p = stripPos(a, w);
+          s = p.s; x = p.x; hidden = p.hidden;
+        } else {
+          s = a === 0 ? (full ? 1.03 : 1) : Math.pow(sideScale, a);
+          for (var k = 1; k <= a; k++) x += w * (Math.pow(sideScale, k - 1) + Math.pow(sideScale, k)) / 2 * 0.82;
+          if (full && a > 0) x += w * 0.06;
+          hidden = a > maxSide;
+          r = a === 0 ? 0 : (d < 0 ? 14 : -14);
+        }
         x = d < 0 ? -x : x;
-        var hidden = a > maxSide;
         c.style.setProperty('--x', x + 'px');
         c.style.setProperty('--s', s);
-        c.style.setProperty('--r', (a === 0 ? 0 : (d < 0 ? 14 : -14)) + 'deg');
+        c.style.setProperty('--r', r + 'deg');
         c.style.setProperty('--o', hidden ? 0 : 1);
         c.style.zIndex = String(20 - a);
         c.classList.toggle('is-active', a === 0);

@@ -72,4 +72,5 @@ model ReelSettings {
   count    Int       @default(10) // how many reels to show in auto mode
   pins     String[]  @default([]) // reels the merchant pinned in ReelStage (Instagram media ids, in order)
   lastSync DateTime?
+  layout   String    @default("stage") // storefront block layout: stage | strip
 }
