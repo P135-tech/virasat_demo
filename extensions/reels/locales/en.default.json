@@ -1,0 +1,12 @@
+{
+  "reels": {
+    "empty": "Choose reels in the ReelStage app to show them here.",
+    "previous": "Previous reel",
+    "next": "Next reel",
+    "play": "Play reel",
+    "pause": "Pause or play",
+    "unmute": "Sound on or off",
+    "choose": "Choose a reel",
+    "view_on_instagram": "View on Instagram"
+  }
+}

@@ -1,0 +1,39 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+# Replace with the Client ID of the "ReelStage" app in your Shopify Partner dashboard.
+client_id = "a5807ba47bde49efc2eba2b550755cf9"
+name = "ReelStage"
+handle = "reelstage"
+embedded = true
+# Your Render address, e.g. https://reelstage.onrender.com
+application_url = "https://reelstage.onrender.com"
+
+[webhooks]
+api_version = "2026-10"
+
+  [[webhooks.subscriptions]]
+  topics = [ "app/uninstalled" ]
+  uri = "/webhooks/app/uninstalled"
+
+  [[webhooks.subscriptions]]
+  topics = [ "app/scopes_update" ]
+  uri = "/webhooks/app/scopes_update"
+
+  # Required for every app listed on the Shopify App Store.
+  [[webhooks.subscriptions]]
+  compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
+  uri = "/webhooks/compliance"
+
+[access_scopes]
+# Files: chosen reels are copied into the store's own Shopify Files. Themes (read only): checks the theme supports app blocks.
+scopes = "read_files,write_files,read_themes"
+
+[auth]
+redirect_urls = [ "https://reelstage.onrender.com/api/auth" ]
+
+[pos]
+embedded = false
+
+[build]
+include_config_on_deploy = true
+automatically_update_urls_on_dev = false

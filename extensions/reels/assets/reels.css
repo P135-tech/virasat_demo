@@ -1,0 +1,86 @@
+/* ReelStage – centre-stage carousel */
+.vr { background: var(--vr-bg); padding: var(--vr-pad) 0; overflow: hidden; }
+.vr__inner { max-width: 1440px; margin: 0 auto; padding: 0 clamp(16px, 3vw, 40px); }
+.vr__head { margin: 0 0 28px; text-align: center; }
+.vr__eyebrow { margin: 0 0 6px; color: var(--vr-accent); font-size: 12px; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; }
+.vr__title { margin: 0; color: var(--vr-heading); }
+.vr__sub { margin: 10px auto 0; max-width: 640px; color: var(--vr-text); }
+
+/* stage: every card sits in the middle; JS moves each one left/right by its distance from the active reel */
+.vr__stage {
+  position: relative; height: calc(var(--vr-card) * 16 / 9); margin: 0 auto;
+  touch-action: pan-y;
+}
+.vr__card {
+  --x: 0px; --s: 1; --o: 1;
+  position: absolute; top: 0; left: 50%; width: var(--vr-card); aspect-ratio: 9 / 16; margin-left: calc(var(--vr-card) / -2);
+  overflow: hidden; border-radius: var(--vr-radius); background: #111;
+  box-shadow: 0 10px 28px rgba(0,0,0,.16);
+  transform: translateX(var(--x)) scale(var(--s)); opacity: var(--o);
+  transition: transform .55s cubic-bezier(.22,.7,.2,1), opacity .45s ease, box-shadow .45s ease;
+  will-change: transform;
+}
+.vr__card.is-active { box-shadow: 0 18px 44px rgba(0,0,0,.28); }
+.vr__card.is-hidden { pointer-events: none; }
+.vr__video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.vr__shade { position: absolute; inset: 0; background: rgba(255,255,255,.35); transition: opacity .45s; pointer-events: none; }
+.vr__card.is-active .vr__shade { opacity: 0; }
+
+/* side reels are one big button that brings them to the centre */
+.vr__pick { position: absolute; inset: 0; z-index: 3; width: 100%; height: 100%; padding: 0; border: 0; background: none; cursor: pointer; }
+.vr__card.is-active .vr__pick { display: none; }
+.vr__pick:focus-visible { outline: 3px solid var(--vr-accent); outline-offset: -3px; border-radius: var(--vr-radius); }
+
+/* progress bar + controls on the centre reel */
+.vr__bar, .vr__controls, .vr__ig, .vr__caption { opacity: 0; transition: opacity .3s; }
+.vr__card.is-active .vr__bar, .vr__card.is-active .vr__controls, .vr__card.is-active .vr__ig, .vr__card.is-active .vr__caption { opacity: 1; }
+.vr__bar { position: absolute; left: 12px; right: 12px; top: 12px; z-index: 4; }
+.vr__progress { display: block; height: 3px; overflow: hidden; border-radius: 3px; background: rgba(255,255,255,.35); }
+.vr__progress span { display: block; width: 0; height: 100%; background: #fff; }
+.vr__controls { position: absolute; left: 12px; bottom: 12px; z-index: 4; display: flex; gap: 8px; }
+.vr__ctrl, .vr__ig {
+  display: grid; place-items: center; width: 38px; height: 38px; padding: 0; border: 0; border-radius: 50%;
+  background: rgba(0,0,0,.45); color: #fff; cursor: pointer; backdrop-filter: blur(4px); transition: background .2s;
+}
+.vr__ctrl:hover, .vr__ig:hover { background: rgba(0,0,0,.7); }
+.vr__ctrl:focus-visible, .vr__ig:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.vr__ig { position: absolute; right: 12px; bottom: 12px; z-index: 4; text-decoration: none; }
+.vr__ctrl .i-play, .vr__ctrl .i-sound { display: none; }
+.vr__card.is-paused .vr__ctrl--play .i-pause { display: none; }
+.vr__card.is-paused .vr__ctrl--play .i-play { display: block; }
+.vr__card.is-sound .vr__ctrl--sound .i-muted { display: none; }
+.vr__card.is-sound .vr__ctrl--sound .i-sound { display: block; }
+.vr__caption {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; margin: 0; padding: 48px 14px 60px; color: #fff;
+  font-size: 13px; line-height: 1.4; background: linear-gradient(to top, rgba(0,0,0,.7), rgba(0,0,0,0));
+  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; pointer-events: none;
+}
+
+.vr__nav {
+  position: absolute; top: 50%; z-index: 30; display: grid; place-items: center; width: 46px; height: 46px; padding: 0;
+  border: 0; border-radius: 50%; background: #fff; color: var(--vr-accent); cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0,0,0,.18); transform: translateY(-50%); transition: background .2s, color .2s;
+}
+.vr__nav:hover { background: var(--vr-accent); color: #fff; }
+.vr__nav--prev { left: calc(50% - var(--vr-card) / 2 - 23px); }
+.vr__nav--next { right: calc(50% - var(--vr-card) / 2 - 23px); }
+
+.vr__dots { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 22px; }
+.vr__dot { width: 8px; height: 8px; padding: 0; border: 0; border-radius: 8px; background: color-mix(in srgb, var(--vr-accent) 25%, transparent); cursor: pointer; transition: width .3s, background .3s; }
+.vr__dot[aria-selected="true"] { width: 24px; background: var(--vr-accent); }
+
+.vr__cta { margin-top: 24px; text-align: center; }
+.vr__button {
+  display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: 12px 26px;
+  border: 1px solid var(--vr-accent); background: var(--vr-accent); color: #fff; text-decoration: none;
+  font-size: 13px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; transition: opacity .2s;
+}
+.vr__button:hover { opacity: .88; }
+.vr__empty { margin: 0; padding: 30px; border: 1px dashed #bbb; border-radius: 8px; color: #777; text-align: center; }
+
+@media (max-width: 749px) {
+  .vr__stage { height: calc(min(var(--vr-card), 64vw) * 16 / 9); }
+  .vr__card { width: min(var(--vr-card), 64vw); margin-left: calc(min(var(--vr-card), 64vw) / -2); }
+  .vr__nav { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .vr__card { transition: opacity .2s; } }

@@ -1,0 +1,62 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  // Free Neon database: paste its connection string into DATABASE_URL (in .env locally, and on Render).
+  url      = env("DATABASE_URL")
+}
+
+model Session {
+  id            String    @id
+  shop          String
+  state         String
+  isOnline      Boolean   @default(false)
+  scope         String?
+  expires       DateTime?
+  accessToken   String
+  userId        BigInt?
+  firstName     String?
+  lastName      String?
+  email         String?
+  accountOwner  Boolean   @default(false)
+  locale        String?
+  collaborator  Boolean?  @default(false)
+  emailVerified Boolean?  @default(false)
+  refreshToken        String?
+  refreshTokenExpires DateTime?
+}
+
+// One connected Instagram professional account per store.
+model InstagramAccount {
+  shop           String   @id
+  igUserId       String
+  username       String
+  accountType    String?
+  accessToken    String // encrypted (AES-256-GCM) with TOKEN_ENCRYPTION_KEY
+  tokenExpiresAt DateTime
+  refreshedAt    DateTime @default(now())
+  connectedAt    DateTime @default(now())
+}
+
+// Reels the merchant chose to show on the store, in order.
+model SelectedReel {
+  id           String   @id @default(cuid())
+  shop         String
+  mediaId      String // Instagram media id
+  position     Int      @default(0)
+  caption      String?
+  permalink    String?
+  igThumbnail  String? // Instagram thumbnail (expires; only used in the admin)
+  fileId       String? // Shopify Files id (gid://shopify/Video/...)
+  videoUrl     String? // Shopify CDN mp4 (permanent)
+  posterUrl    String? // Shopify CDN preview image (permanent)
+  status       String   @default("processing") // processing | ready | failed
+  error        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([shop, mediaId])
+  @@index([shop, position])
+}
