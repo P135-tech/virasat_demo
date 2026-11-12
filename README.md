@@ -5,7 +5,7 @@ A public Shopify app: merchants connect their Instagram Business/Creator account
 ## How it works
 
 1. **Connect Instagram** (Instagram Graph API via Facebook Login for Business, `config_id`). The merchant logs in with Facebook; the app finds the Instagram Business/Creator account linked to their Page and stores a non-expiring Page token, **encrypted**.
-2. **Newest reels, automatically.** The app takes the account's 15 newest reels (no picking). Each time the app is opened, or every few hours, new reels are added and the oldest drop off.
+2. **Pick reels.** The app lists the account's 15 newest reels; the merchant ticks the ones to show and sets their order.
 3. **Copy to Shopify Files.** Each chosen reel is downloaded and uploaded to the store's Files (staged upload → `fileCreate`), so the video lives on Shopify's CDN and never expires.
 4. **Show on the store.** The ready reels are written to an app-data metafield (`app.metafields.reels.selected`), which the theme app extension block `extensions/reels/blocks/reels.liquid` renders as a slider with a full-screen player.
 
@@ -13,7 +13,7 @@ A public Shopify app: merchants connect their Instagram Business/Creator account
 
 | Path | What it does |
 |---|---|
-| `app/routes/app._index.tsx` | Main screen: connect, see the 15 newest reels on the store |
+| `app/routes/app._index.tsx` | Main screen: connect, choose from the 15 newest reels, order, remove |
 | `app/routes/app.help.tsx` | How to add the block to the theme |
 | `app/routes/instagram.callback.tsx` | Instagram sends the merchant back here after "Allow" |
 | `app/lib/instagram.server.ts` | Instagram login, token refresh, reading reels |

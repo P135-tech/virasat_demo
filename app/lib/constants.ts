@@ -1,4 +1,5 @@
 /** Settings shared by the server and the browser. */
-export const MAX_REELS = 20;
-/** How many of the newest reels are shown on the store. */
-export const AUTO_COUNT = 15;
+/** How many of the newest Instagram reels the merchant can choose from. */
+export const LIST_COUNT = 15;
+/** Most reels that can be shown on the store. */
+export const MAX_REELS = 15;

@@ -1,13 +1,13 @@
 import db from "../db.server";
 import { unauthenticated } from "../shopify.server";
-import { getReel, listReels, type Reel } from "./instagram.server";
+import { getReel } from "./instagram.server";
 
 /** The part of the Admin API client this file needs (works for authenticate.admin and unauthenticated.admin). */
 export type Admin = {
   graphql: (query: string, options?: { variables?: Record<string, unknown> }) => Promise<Response>;
 };
 
-import { AUTO_COUNT, MAX_REELS } from "./constants";
+import { MAX_REELS } from "./constants";
 export { MAX_REELS };
 
 async function gql<T>(admin: Admin, query: string, variables?: Record<string, unknown>): Promise<T> {
@@ -241,56 +241,4 @@ export async function saveSelection(
   });
   await publishToStore(admin, shop);
   processPending(shop);
-}
-
-// ---------- The newest reels, kept up to date automatically ----------
-
-/** The store's newest reels, newest first (pinned posts are not treated specially: Meta's API doesn't say which are pinned). */
-export function newest(reels: Reel[], count = AUTO_COUNT) {
-  return [...reels]
-    .sort((a, b) => Date.parse(b.timestamp || "0") - Date.parse(a.timestamp || "0"))
-    .slice(0, count)
-    .map((r) => ({ ...r, pinned: false }));
-}
-
-/** Brings the store up to date (new reels in, old ones out). Returns true if anything changed. */
-export async function syncAuto(admin: Admin, shop: string, reels?: Reel[]) {
-  const list = reels ?? (await listReels(shop, AUTO_COUNT));
-  const pick = newest(list);
-  const current = await db.selectedReel.findMany({ where: { shop }, orderBy: { position: "asc" } });
-  const same = current.length === pick.length && current.every((c, i) => c.mediaId === pick[i].id && !c.pinned);
-  await db.reelSettings.upsert({
-    where: { shop },
-    create: { shop, mode: "auto", count: AUTO_COUNT, lastSync: new Date() },
-    update: { mode: "auto", count: AUTO_COUNT, pins: [], lastSync: new Date() },
-  });
-  if (same) return false;
-  await saveSelection(admin, shop, pick);
-  return true;
-}
-
-async function lastSync(shop: string) {
-  return (await db.reelSettings.findUnique({ where: { shop } }))?.lastSync ?? null;
-}
-
-/** Checks every store for new reels every few hours (while the server is awake). */
-async function syncAllStores() {
-  const accounts = await db.instagramAccount.findMany({ select: { shop: true } });
-  for (const { shop } of accounts) {
-    try {
-      const last = await lastSync(shop);
-      if (last && Date.now() - last.getTime() < 2 * 3600 * 1000) continue;
-      const { admin } = await unauthenticated.admin(shop);
-      await syncAuto(admin as unknown as Admin, shop);
-    } catch (e) {
-      console.error("auto sync failed for", shop, e instanceof Error ? e.message : e);
-    }
-  }
-}
-export { syncAllStores };
-
-const g = globalThis as unknown as { __reelstageTimer?: NodeJS.Timeout };
-if (!g.__reelstageTimer && process.env.NODE_ENV === "production") {
-  g.__reelstageTimer = setInterval(() => void syncAllStores(), 3 * 3600 * 1000);
-  setTimeout(() => void syncAllStores(), 60 * 1000);
 }

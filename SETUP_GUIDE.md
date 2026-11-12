@@ -21,7 +21,6 @@ Same setup as Store Sync: **GitHub → Render (app) + Neon (database)**. Never p
    - `META_APP_ID`, `META_APP_SECRET`, `META_LOGIN_CONFIG_ID` (step 4)
    - `TOKEN_ENCRYPTION_KEY` = a long random text (40+ characters). **Never change it later**, or saved Instagram logins stop working.
    - `SUPPORT_EMAIL`, `COMPANY_NAME` = shown on the privacy page.
-   - Optional `CRON_SECRET` = any long random text. Then a free scheduler (e.g. cron-job.org) can open `https://reelstage.onrender.com/cron/sync?key=<CRON_SECRET>` every 3 hours, so new reels reach stores even when nobody opens the app.
 3. Deploy. The first deploy also builds the app; if it fails, send the build log.
 
 ## 4. Meta app (Facebook Login for Business → Instagram)
