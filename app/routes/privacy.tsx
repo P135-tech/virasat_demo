@@ -31,7 +31,7 @@ export default function Privacy() {
           reels block).
         </li>
         <li>
-          <strong>From Instagram (only after the merchant connects):</strong> the Instagram account ID, username and account type,
+          <strong>From Instagram (only after the merchant connects):</strong> the Instagram account ID and username, the Facebook Page linked to it, an app-specific Facebook user ID,
           a long-lived access token, and details of the account’s own posts (post ID, caption, media type, video and thumbnail
           addresses, permalink and date).
         </li>

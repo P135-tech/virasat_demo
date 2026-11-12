@@ -205,12 +205,14 @@ export default function Reels() {
               “ReelStage reels” block to any page in the theme editor.
             </s-paragraph>
             <s-paragraph>
-              You will sign in on Instagram’s own page. This app never sees your password and only reads your posts; it never
-              posts or changes anything on Instagram.
+              You will sign in on Meta’s own page with the Facebook account that manages your Facebook Page. This app never
+              sees your password and only reads your posts; it never posts or changes anything on Instagram or Facebook.
             </s-paragraph>
             <s-banner tone="info">
-              Your account must be an Instagram <s-text type="strong">Business</s-text> or <s-text type="strong">Creator</s-text>{" "}
-              account. Personal accounts can be switched for free in Instagram → Settings → Account type and tools.
+              Your Instagram must be a <s-text type="strong">Business</s-text> or <s-text type="strong">Creator</s-text> account{" "}
+              <s-text type="strong">linked to a Facebook Page</s-text>. Both are free: in Instagram go to Settings → Account type and
+              tools to switch, and Accounts Center (or Meta Business Suite) to link your Page. When Meta asks, tick that Page and
+              its Instagram account.
             </s-banner>
             <s-stack direction="inline">
               <s-button variant="primary" onClick={connect} disabled={!d.authUrl}>

@@ -36,7 +36,7 @@ export default function Help() {
       <s-section heading="Good to know">
         <s-unordered-list>
           <s-list-item>Up to 20 reels can be shown. Change the order with the arrows on the Reels page.</s-list-item>
-          <s-list-item>Only Instagram Business or Creator accounts can be connected (an Instagram rule).</s-list-item>
+          <s-list-item>Your Instagram must be a Business or Creator account linked to a Facebook Page (a Meta rule).</s-list-item>
           <s-list-item>Disconnecting Instagram does not delete reels already on your store; remove them on the Reels page.</s-list-item>
           <s-list-item>The app only reads your posts. It never posts, comments or changes anything on Instagram.</s-list-item>
         </s-unordered-list>

@@ -18,18 +18,25 @@ Same setup as Store Sync: **GitHub → Render (app) + Neon (database)**. Never p
    - `SHOPIFY_APP_URL` = `https://reelstage.onrender.com` (your Render address)
    - `SCOPES` = `read_files,write_files,read_themes`
    - `DATABASE_URL` = Neon connection string
-   - `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET` (step 4)
+   - `META_APP_ID`, `META_APP_SECRET`, `META_LOGIN_CONFIG_ID` (step 4)
    - `TOKEN_ENCRYPTION_KEY` = a long random text (40+ characters). **Never change it later**, or saved Instagram logins stop working.
    - `SUPPORT_EMAIL`, `COMPANY_NAME` = shown on the privacy page.
 3. Deploy. The first deploy also builds the app; if it fails, send the build log.
 
-## 4. Meta (Instagram) app
-1. developers.facebook.com → **Create app** → use case **Instagram API with Instagram Login** → type **Business**.
-2. **Instagram → API setup with Instagram login**:
-   - Copy **Instagram app ID** and **Instagram app secret** into Render.
-   - **Business login settings → OAuth redirect URIs**: `https://reelstage.onrender.com/instagram/callback`
-   - Under **Generate access tokens → Add account**, add your own Instagram account as a **tester** (needed until App Review).
-3. **App settings → Basic**: Privacy Policy URL `https://reelstage.onrender.com/privacy`, a Data Deletion Instructions URL (same page), app icon, category.
+## 4. Meta app (Facebook Login for Business → Instagram)
+1. developers.facebook.com → **Create App** → use case **Manage messaging & content on Instagram** → connect a **business portfolio** (required).
+2. In the use case, choose **API setup with Facebook login** (new apps can't use "Instagram login").
+3. Left menu **Facebook Login for Business → Configurations → Create configuration**:
+   - Name `ReelStage login`, login variation **General**, token type **User access token**.
+   - Assets: **Pages** and **Instagram accounts**.
+   - Permissions: `instagram_basic`, `pages_show_list`, `pages_read_engagement`, `business_management`.
+   - Copy the **Configuration ID** → Render `META_LOGIN_CONFIG_ID`.
+4. **Facebook Login for Business → Settings**:
+   - Valid OAuth Redirect URIs: `https://reelstage.onrender.com/instagram/callback`
+   - Deauthorize callback URL: `https://reelstage.onrender.com/instagram/deauthorize`
+   - Data deletion request URL: `https://reelstage.onrender.com/instagram/data-deletion`
+5. **App settings → Basic**: copy **App ID** → `META_APP_ID`, **App secret** → `META_APP_SECRET`; set Privacy Policy URL `https://reelstage.onrender.com/privacy`; App domain `reelstage.onrender.com`.
+6. **App roles → Roles**: add yourself / testers. Testers' Instagram must be Business or Creator and linked to a Facebook Page they manage.
 
 ## 5. Push the Shopify config and theme block
 On your computer, in this repo (Node 22 + Shopify CLI installed):
@@ -43,7 +50,7 @@ shopify app deploy          # sends shopify.app.toml + the ReelStage reels theme
 Partner dashboard → ReelStage → **Test your app** → install on the dev store → Connect Instagram → tick reels → Save → **How to show reels → Add to home page** → Save in the theme editor.
 
 ## 7. Go public
-1. **Meta App Review**: request **Advanced Access** for `instagram_business_basic`. Upload a screen recording of: installing the app, connecting Instagram, choosing reels, and the reels showing on the store. Complete **Business Verification** if asked. Then switch the Meta app to **Live**.
+1. **Meta App Review**: request **Advanced Access** for `instagram_basic`, `pages_show_list`, `pages_read_engagement` and `business_management`. Upload a screen recording of: installing the app, connecting Instagram, choosing reels, and the reels showing on the store. Complete **Business Verification** if asked. Then switch the Meta app to **Live**.
 2. **Shopify App Store**: Partner dashboard → Distribution → **Public**. Fill the listing (name, description, screenshots, privacy URL, support email, pricing = Free) and submit for review.
 
 Until Meta approves, only Instagram accounts added as testers can connect.

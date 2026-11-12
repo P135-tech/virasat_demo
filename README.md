@@ -4,7 +4,7 @@ A public Shopify app: merchants connect their Instagram Business/Creator account
 
 ## How it works
 
-1. **Connect Instagram** (Instagram API with Instagram Login, scope `instagram_business_basic`). The merchant signs in on Instagram's own page. The 60-day token is stored **encrypted** and refreshed automatically.
+1. **Connect Instagram** (Instagram Graph API via Facebook Login for Business, `config_id`). The merchant logs in with Facebook; the app finds the Instagram Business/Creator account linked to their Page and stores a non-expiring Page token, **encrypted**.
 2. **Pick reels.** The app lists the account's reels; the merchant ticks up to 20 and sets their order.
 3. **Copy to Shopify Files.** Each chosen reel is downloaded and uploaded to the store's Files (staged upload → `fileCreate`), so the video lives on Shopify's CDN and never expires.
 4. **Show on the store.** The ready reels are written to an app-data metafield (`app.metafields.reels.selected`), which the theme app extension block `extensions/reels/blocks/reels.liquid` renders as a slider with a full-screen player.

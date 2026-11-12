@@ -32,6 +32,8 @@ model Session {
 model InstagramAccount {
   shop           String   @id
   igUserId       String
+  fbUserId       String? // app-scoped Facebook user id (Meta's deauthorize / data-deletion requests use it)
+  pageId         String? // Facebook Page linked to the Instagram account
   username       String
   accountType    String?
   accessToken    String // encrypted (AES-256-GCM) with TOKEN_ENCRYPTION_KEY
