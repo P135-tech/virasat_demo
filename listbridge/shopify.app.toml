@@ -1,0 +1,35 @@
+# Shopify app settings for ListBridge. Fill in client_id from the Dev Dashboard (Apps → ListBridge → Settings).
+client_id = "REPLACE_WITH_LISTBRIDGE_CLIENT_ID"
+name = "ListBridge"
+handle = "listbridge"
+application_url = "https://listbridge.onrender.com"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = false
+include_config_on_deploy = true
+
+[webhooks]
+api_version = "2026-10"
+
+  [[webhooks.subscriptions]]
+  topics = [ "app/uninstalled" ]
+  uri = "/webhooks/app/uninstalled"
+
+  [[webhooks.subscriptions]]
+  topics = [ "app/scopes_update" ]
+  uri = "/webhooks/app/scopes_update"
+
+  [[webhooks.subscriptions]]
+  compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
+  uri = "/webhooks/compliance"
+
+[access_scopes]
+# Read products (title, description, tags, price, SKU, photos) and their stock.
+scopes = "read_products,read_inventory"
+
+[auth]
+redirect_urls = [ "https://listbridge.onrender.com/api/auth" ]
+
+[pos]
+embedded = false
