@@ -14,6 +14,16 @@
   endif
 -%}
 
+{%- liquid
+  assign playable = 0
+  for r in reels
+    if r.v != blank
+      assign playable = playable | plus: 1
+    endif
+  endfor
+-%}
+
+{%- if playable > 0 -%}
 {{ 'reels.css' | asset_url | stylesheet_tag }}
 
 <section
@@ -142,13 +152,16 @@
           </a>
         </div>
       {%- endif -%}
-    {%- elsif request.design_mode -%}
-      <p class="vr__empty">{{ 'reels.empty' | t }}</p>
     {%- endif -%}
   </div>
 </section>
 
 <script src="{{ 'reels.js' | asset_url }}" defer></script>
+{%- elsif request.design_mode -%}
+<div style="padding:24px;margin:12px;border:1px dashed #bbb;border-radius:12px;color:#777;text-align:center;font-size:14px">
+  {{ 'reels.empty' | t }}
+</div>
+{%- endif -%}
 
 {% schema %}
 {

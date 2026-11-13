@@ -426,7 +426,11 @@ export async function setStorage(admin: Admin, shop: string, storage: string) {
  * Reels copied to Shopify Files belong to the store and stay. everything: true removes those too (data deletion).
  */
 export async function removeInstagramReels(shop: string, opts: { admin?: Admin; everything?: boolean } = {}) {
-  await db.selectedReel.deleteMany({ where: opts.everything ? { shop } : { shop, fileId: null } });
+  // In "Play from Instagram" mode a disconnect is a clean start: every chosen reel comes off the store
+  // (including any reel that happened to have a Shopify copy from earlier). In "Copy to Shopify Files" mode
+  // the copied reels belong to the store and stay.
+  const everything = opts.everything || (await storageFor(shop)) === "instagram";
+  await db.selectedReel.deleteMany({ where: everything ? { shop } : { shop, fileId: null } });
   try {
     const admin = opts.admin ?? ((await unauthenticated.admin(shop)).admin as unknown as Admin);
     await publishToStore(admin, shop);
