@@ -73,4 +73,5 @@ model ReelSettings {
   pins     String[]  @default([]) // reels the merchant pinned in ReelStage (Instagram media ids, in order)
   lastSync DateTime?
   layout   String    @default("stage") // storefront block layout: stage | strip
+  storage  String    @default("instagram") // where videos play from: instagram (links, refreshed) | files (copied to Shopify Files)
 }

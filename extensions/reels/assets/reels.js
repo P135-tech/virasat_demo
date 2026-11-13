@@ -208,6 +208,13 @@
 
     cards.forEach(function (c, i) {
       var v = videoOf(i);
+      // Instagram cover image expired? use the app's always-current address instead
+      var fbp = v.getAttribute('data-fallback');
+      if (fbp && v.poster) {
+        var probe = new Image();
+        probe.onerror = function () { v.poster = fbp + '?poster=1'; };
+        probe.src = v.poster;
+      }
       v.addEventListener('ended', function () {
         if (i !== active) return;
         if (full) endFull(advance && n > 1);

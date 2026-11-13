@@ -16,8 +16,9 @@ export default function Help() {
     <s-page heading="How to show reels on your store">
       <s-section heading="1. Choose your reels">
         <s-paragraph>
-          On the Reels page, connect Instagram, tick the reels you want and click Save. Each chosen reel is copied into your
-          store’s Files (Content → Files), so it keeps working even if Instagram changes its links.
+          On the Reels page, connect Instagram, tick the reels you want and click Save. By default the reels play straight from
+          Instagram, and ReelStage keeps their links up to date. If you prefer, choose “Copy to Shopify Files” on the Reels page
+          to keep a copy of each reel in your store’s Files (Content → Files).
         </s-paragraph>
       </s-section>
       <s-section heading="2. Add the block to a page">

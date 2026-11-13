@@ -6,7 +6,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { authorizeUrl, disconnect, listReels, type Reel } from "../lib/instagram.server";
-import { forgetOldInstall, setLayout, publishToStore, processPending, refreshInstagramLinks, refreshStatuses, resumeIfStuck, saveSelection, type Admin } from "../lib/reels.server";
+import { forgetOldInstall, setLayout, setStorage, storageFor, publishToStore, processPending, refreshInstagramLinks, refreshStatuses, resumeIfStuck, saveSelection, type Admin } from "../lib/reels.server";
 import { LIST_COUNT, MAX_REELS } from "../lib/constants";
 import { themeSupportsAppBlocks } from "../lib/theme.server";
 
@@ -48,6 +48,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
   const theme = await themeSupportsAppBlocks(admin as unknown as Admin);
   const layout = (await db.reelSettings.findUnique({ where: { shop } }))?.layout === "strip" ? "strip" : "stage";
+  const storage = await storageFor(shop);
   const selected = await db.selectedReel.findMany({ where: { shop }, orderBy: { position: "asc" } });
 
   return {
@@ -61,6 +62,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     igError,
     theme,
     layout,
+    storage,
     selected: selected.map((s) => ({
       mediaId: s.mediaId,
       status: s.status,
@@ -80,6 +82,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const intent = String(fd.get("intent"));
   const a = admin as unknown as Admin;
   try {
+    if (intent === "storage") {
+      const v = String(fd.get("storage"));
+      await setStorage(a, shop, v);
+      return {
+        ok: true,
+        message: v === "files" ? "Copying your reels to Shopify Files…" : "New reels now play straight from Instagram.",
+      };
+    }
     if (intent === "layout") {
       await setLayout(a, shop, String(fd.get("layout")));
       return { ok: true, message: "Layout saved. Refresh your store to see it." };
@@ -295,6 +305,38 @@ export default function Reels() {
         </s-stack>
       </s-section>
 
+      <s-section heading="Where the videos play from">
+        <s-stack gap="base">
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 14 }}>
+            {STORAGE_CHOICES.map((o) => {
+              const on = d.storage === o.id;
+              return (
+                <button
+                  key={o.id}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => !on && post({ intent: "storage", storage: o.id })}
+                  aria-pressed={on}
+                  style={{
+                    flex: "1 1 260px", maxWidth: 380, textAlign: "left", padding: 14, borderRadius: 14, cursor: on ? "default" : "pointer",
+                    font: "inherit", background: on ? "#f6f6f7" : "#fff", border: on ? "2px solid #111" : "1px solid #d4d4d4",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700 }}>
+                    <span style={{ width: 16, height: 16, borderRadius: "50%", border: "2px solid #111", display: "grid", placeItems: "center" }}>
+                      {on && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#111" }} />}
+                    </span>
+                    {o.name}
+                    {on && <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 600, color: "#0a7d35" }}>In use</span>}
+                  </div>
+                  <div style={{ color: "#616161", fontSize: 13, marginTop: 6 }}>{o.text}</div>
+                </button>
+              );
+            })}
+          </div>
+        </s-stack>
+      </s-section>
+
       <s-section heading={`On your store (${shownCount} of ${d.selected.length} ready)`}>
         <s-stack gap="base">
           {d.selected.length === 0 ? (
@@ -306,7 +348,7 @@ export default function Reels() {
                   {s.image ? <img src={s.image} alt="" style={thumb} /> : <div style={thumb} />}
                   <div style={{ padding: 8, display: "grid", gap: 6 }}>
                     {s.status === "ready" && <s-badge tone="success">On store</s-badge>}
-                    {s.fromInstagram && <s-text color="subdued">Plays from Instagram</s-text>}
+                    {s.fromInstagram && d.storage === "files" && <s-text color="subdued">Plays from Instagram (couldn’t copy)</s-text>}
                     {s.status === "processing" && <s-badge tone="info">Copying…</s-badge>}
                     {s.status === "failed" && <s-badge tone="critical">Failed</s-badge>}
                     {s.error && <s-text color="subdued">{s.error}</s-text>}
@@ -399,6 +441,19 @@ export default function Reels() {
     </s-page>
   );
 }
+
+const STORAGE_CHOICES = [
+  {
+    id: "instagram",
+    name: "Play from Instagram (recommended)",
+    text: "Nothing is downloaded. Reels show on your store straight away and stay in sync with Instagram.",
+  },
+  {
+    id: "files",
+    name: "Copy to Shopify Files",
+    text: "Each reel is copied into your store’s Files, so it keeps playing even if you disconnect Instagram. Some Shopify plans limit video uploads per week.",
+  },
+] as const;
 
 const LAYOUT_CHOICES = [
   { id: "stage", name: "Centre stage", text: "The playing reel in the middle, smaller tilted reels on each side." },

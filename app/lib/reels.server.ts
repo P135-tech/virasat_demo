@@ -1,6 +1,6 @@
 import db from "../db.server";
 import { unauthenticated } from "../shopify.server";
-import { getReel } from "./instagram.server";
+import { getReel, listReels, type Reel } from "./instagram.server";
 
 /** The part of the Admin API client this file needs (works for authenticate.admin and unauthenticated.admin). */
 export type Admin = {
@@ -115,40 +115,94 @@ export function instagramLink(shop: string, mediaId: string) {
  * from Instagram instead. Instagram's video addresses change over time, so the storefront also gets a
  * fallback address on this app that always points to the current one.
  */
-async function useInstagramDirect(shop: string, rowId: string, mediaId: string, note: string) {
-  let videoUrl: string | null = null;
-  let posterUrl: string | null = null;
-  try {
-    const r = await getReel(shop, mediaId);
-    videoUrl = r.mediaUrl;
-    posterUrl = r.thumbnail;
-  } catch {
-    /* the fallback address still works later */
+async function useInstagramDirect(shop: string, rowId: string, mediaId: string, note: string | null, known?: Reel) {
+  let reel: Reel | null = known ?? null;
+  if (!reel) {
+    try {
+      reel = await getReel(shop, mediaId);
+    } catch {
+      /* the fallback address still works later */
+    }
   }
-  console.warn(`Reel ${mediaId} for ${shop} plays from Instagram: ${note}`);
+  if (note) console.warn(`Reel ${mediaId} for ${shop} plays from Instagram: ${note}`);
   await db.selectedReel.update({
     where: { id: rowId },
-    data: { status: "ready", fileId: null, videoUrl: videoUrl ?? instagramLink(shop, mediaId), posterUrl, error: null },
+    data: {
+      status: "ready",
+      fileId: null,
+      videoUrl: reel?.mediaUrl ?? instagramLink(shop, mediaId),
+      posterUrl: reel?.thumbnail ?? null,
+      ...(reel ? { caption: reel.caption, permalink: reel.permalink } : {}),
+      error: null,
+    },
   });
 }
 
-/** Instagram-hosted reels: get fresh video addresses (they expire) when the app is opened. */
-export async function refreshInstagramLinks(shop: string) {
-  const old = await db.selectedReel.findMany({
-    where: { shop, status: "ready", fileId: null, updatedAt: { lt: new Date(Date.now() - 6 * 3600 * 1000) } },
-  });
-  for (const r of old) {
+/** Where a store's videos play from: "instagram" (default, nothing is copied) or "files" (copied to Shopify Files). */
+export async function storageFor(shop: string): Promise<"instagram" | "files"> {
+  const s = await db.reelSettings.findUnique({ where: { shop } });
+  return s?.storage === "files" ? "files" : "instagram";
+}
+
+/** Fresh Instagram details for many reels with as few Meta requests as possible. */
+async function freshReels(shop: string, mediaIds: string[]) {
+  const map = new Map<string, Reel>();
+  try {
+    for (const r of await listReels(shop, 50)) map.set(r.id, r);
+  } catch {
+    /* fall back to one request per reel below */
+  }
+  for (const id of mediaIds) {
+    if (map.has(id)) continue;
     try {
-      const fresh = await getReel(shop, r.mediaId);
-      await db.selectedReel.update({
-        where: { id: r.id },
-        data: { videoUrl: fresh.mediaUrl ?? r.videoUrl, posterUrl: fresh.thumbnail ?? r.posterUrl },
-      });
+      map.set(id, await getReel(shop, id));
     } catch {
-      /* keep the old address; the fallback address covers it */
+      /* deleted on Instagram or not reachable; the fallback address covers it */
     }
   }
-  return old.length > 0;
+  return map;
+}
+
+/**
+ * Instagram-hosted reels: Instagram's video addresses expire, so they are renewed every few hours
+ * (when the app is opened, and in the background for every store).
+ */
+export async function refreshInstagramLinks(shop: string, olderThanHours = 3) {
+  const old = await db.selectedReel.findMany({
+    where: { shop, status: "ready", fileId: null, updatedAt: { lt: new Date(Date.now() - olderThanHours * 3600 * 1000) } },
+  });
+  if (!old.length) return false;
+  const fresh = await freshReels(shop, old.map((r) => r.mediaId));
+  for (const r of old) {
+    const f = fresh.get(r.mediaId);
+    await db.selectedReel.update({
+      where: { id: r.id },
+      // touching updatedAt even when Instagram didn't answer, so we don't retry on every page load
+      data: f ? { videoUrl: f.mediaUrl ?? r.videoUrl, posterUrl: f.thumbnail ?? r.posterUrl } : { videoUrl: r.videoUrl },
+    });
+  }
+  return true;
+}
+
+/** Renews Instagram links for every store and updates their storefronts. */
+export async function refreshAllStores() {
+  const accounts = await db.instagramAccount.findMany({ select: { shop: true } });
+  for (const { shop } of accounts) {
+    try {
+      if (await refreshInstagramLinks(shop)) {
+        const { admin } = await unauthenticated.admin(shop);
+        await publishToStore(admin as unknown as Admin, shop);
+      }
+    } catch (e) {
+      console.error("link refresh failed for", shop, e instanceof Error ? e.message : e);
+    }
+  }
+}
+
+const timers = globalThis as unknown as { __reelstageRefresh?: NodeJS.Timeout };
+if (!timers.__reelstageRefresh && process.env.NODE_ENV === "production") {
+  timers.__reelstageRefresh = setInterval(() => void refreshAllStores(), 2 * 3600 * 1000);
+  setTimeout(() => void refreshAllStores(), 90 * 1000);
 }
 
 // One copy job per store at a time (a second Save while copying just joins the running job).
@@ -161,6 +215,13 @@ export function processPending(shop: string) {
   void (async () => {
     try {
       const { admin } = await unauthenticated.admin(shop);
+      if ((await storageFor(shop)) === "instagram") {
+        const todo = await db.selectedReel.findMany({ where: { shop, status: "processing", fileId: null } });
+        const fresh = await freshReels(shop, todo.map((r) => r.mediaId));
+        for (const r of todo) await useInstagramDirect(shop, r.id, r.mediaId, null, fresh.get(r.mediaId));
+        await publishToStore(admin as unknown as Admin, shop);
+        return;
+      }
       for (;;) {
       const todo = await db.selectedReel.findMany({ where: { shop, status: "processing", fileId: null }, take: 1 });
       if (!todo.length) break;
@@ -304,6 +365,15 @@ export async function saveSelection(
     where: { shop, status: "failed", mediaId: { in: keep } },
     data: { status: "processing", fileId: null, error: null },
   });
+  if ((await storageFor(shop)) === "instagram") {
+    const todo = await db.selectedReel.findMany({ where: { shop, status: "processing", fileId: null } });
+    if (todo.length) {
+      const fresh = await freshReels(shop, todo.map((r) => r.mediaId));
+      for (const r of todo) await useInstagramDirect(shop, r.id, r.mediaId, null, fresh.get(r.mediaId));
+    }
+    await publishToStore(admin, shop);
+    return;
+  }
   await publishToStore(admin, shop);
   processPending(shop);
 }
@@ -334,4 +404,18 @@ export async function setLayout(admin: Admin, shop: string, layout: string) {
   const value = layout === "strip" ? "strip" : "stage";
   await db.reelSettings.upsert({ where: { shop }, create: { shop, layout: value }, update: { layout: value } });
   await publishToStore(admin, shop);
+}
+
+/**
+ * Switches where videos play from. "files": reels not yet in Shopify Files are copied there.
+ * "instagram": new reels are linked from Instagram; reels already copied keep using their Shopify copy.
+ */
+export async function setStorage(admin: Admin, shop: string, storage: string) {
+  const value = storage === "files" ? "files" : "instagram";
+  await db.reelSettings.upsert({ where: { shop }, create: { shop, storage: value }, update: { storage: value } });
+  if (value === "files") {
+    await db.selectedReel.updateMany({ where: { shop, fileId: null }, data: { status: "processing", error: null } });
+    await publishToStore(admin, shop);
+    processPending(shop);
+  }
 }
