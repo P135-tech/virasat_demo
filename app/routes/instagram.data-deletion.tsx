@@ -2,6 +2,7 @@ import type { ActionFunctionArgs } from "react-router";
 import { randomBytes } from "crypto";
 import db from "../db.server";
 import { parseSignedRequest } from "../lib/signed-request.server";
+import { removeInstagramReels } from "../lib/reels.server";
 
 /**
  * Meta calls this when an Instagram user asks for their data to be deleted.
@@ -12,10 +13,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const data = parseSignedRequest(String(form.get("signed_request") || ""));
   if (!data?.user_id) return new Response("Bad request", { status: 400 });
   const accounts = await db.instagramAccount.findMany({ where: { OR: [{ fbUserId: String(data.user_id) }, { igUserId: String(data.user_id) }] } });
-  for (const a of accounts) {
-    await db.selectedReel.deleteMany({ where: { shop: a.shop } });
-  }
   await db.instagramAccount.deleteMany({ where: { OR: [{ fbUserId: String(data.user_id) }, { igUserId: String(data.user_id) }] } });
+  for (const a of accounts) await removeInstagramReels(a.shop, { everything: true });
   const code = randomBytes(8).toString("hex");
   const base = (process.env.SHOPIFY_APP_URL || "").replace(/\/$/, "");
   return Response.json({ url: `${base}/privacy#deleted-${code}`, confirmation_code: code });

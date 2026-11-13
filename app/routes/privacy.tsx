@@ -56,7 +56,7 @@ export default function Privacy() {
 
       <h2 style={h2}>How long we keep it</h2>
       <ul>
-        <li>When the merchant clicks Disconnect, the Instagram token and account details are deleted immediately.</li>
+        <li>When the merchant clicks Disconnect (or removes ReelStage in their Facebook or Instagram settings), the Instagram token and account details are deleted immediately, and reels played from Instagram are removed from the store.</li>
         <li>When the app is uninstalled, the Instagram token, account details and reel list are deleted immediately; Shopify’s
           shop-redact request removes any remaining store data.</li>
         <li>Reels already copied into the merchant’s Shopify Files belong to the merchant and stay there until they delete them.</li>

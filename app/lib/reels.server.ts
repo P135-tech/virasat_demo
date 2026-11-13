@@ -419,3 +419,18 @@ export async function setStorage(admin: Admin, shop: string, storage: string) {
     processPending(shop);
   }
 }
+
+/**
+ * Instagram access was removed (Disconnect, or the merchant removed ReelStage on Facebook/Instagram).
+ * Reels played from Instagram can no longer be kept up to date, so they come off the store now.
+ * Reels copied to Shopify Files belong to the store and stay. everything: true removes those too (data deletion).
+ */
+export async function removeInstagramReels(shop: string, opts: { admin?: Admin; everything?: boolean } = {}) {
+  await db.selectedReel.deleteMany({ where: opts.everything ? { shop } : { shop, fileId: null } });
+  try {
+    const admin = opts.admin ?? ((await unauthenticated.admin(shop)).admin as unknown as Admin);
+    await publishToStore(admin, shop);
+  } catch (e) {
+    console.error("could not update the store after removing reels", shop, e instanceof Error ? e.message : e);
+  }
+}
