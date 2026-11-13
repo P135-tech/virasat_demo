@@ -102,7 +102,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         thumbnail: string | null;
       }[];
       await saveSelection(a, shop, chosen);
-      return { ok: true, message: chosen.length ? "Saved. New reels are being copied to your store." : "Saved. No reels are shown now." };
+      const files = (await storageFor(shop)) === "files";
+      return {
+        ok: true,
+        message: !chosen.length
+          ? "Saved. No reels are shown now."
+          : files
+            ? "Saved. New reels are being copied to your store."
+            : "Saved. Your reels are now on your store.",
+      };
     }
     if (intent === "move" || intent === "remove") {
       const mediaId = String(fd.get("mediaId"));
