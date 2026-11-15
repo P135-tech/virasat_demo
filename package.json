@@ -25,7 +25,7 @@
   },
   "dependencies": {
     "@prisma/client": "^6.19.0",
-    "@react-router/dev": "7.18.2",
+    "@react-router/dev": "8.5.1",
     "@react-router/fs-routes": "7.18.2",
     "@react-router/node": "7.18.2",
     "@react-router/serve": "7.18.2",
