@@ -27,21 +27,21 @@
 {{ 'reels.css' | asset_url | stylesheet_tag }}
 
 <section
-  class="vr vr--{{ block.settings.style }} vr--ring-{{ ring }} vr--layout-{{ layout }}"
-  data-layout="{{ layout }}"
+  class="vr vr--{{ block.settings.style | escape }} vr--ring-{{ ring | escape }} vr--layout-{{ layout | escape }}"
+  data-layout="{{ layout | escape }}"
   id="vr-{{ uid }}"
-  data-advance="{{ block.settings.auto_advance }}"
-  data-preview="{{ block.settings.preview_seconds }}"
-  data-sides="{{ block.settings.sides }}"
+  data-advance="{{ block.settings.auto_advance | escape }}"
+  data-preview="{{ block.settings.preview_seconds | escape }}"
+  data-sides="{{ block.settings.sides | escape }}"
   style="
-    --vr-card: {{ block.settings.card_width }}px;
-    --vr-radius: {{ block.settings.radius }}px;
-    --vr-side-scale: {{ block.settings.side_scale | divided_by: 100.0 }};
-    --vr-accent: {{ block.settings.accent }};
-    {%- if block.settings.heading_color != blank %} --vr-heading: {{ block.settings.heading_color }};{% endif %}
-    {%- if block.settings.text_color != blank %} --vr-text: {{ block.settings.text_color }};{% endif %}
-    {%- if block.settings.style == 'custom' and block.settings.background != blank %} --vr-bg: {{ block.settings.background }};{% endif %}
-    --vr-pad: {{ block.settings.padding }}px;
+    --vr-card: {{ block.settings.card_width | escape }}px;
+    --vr-radius: {{ block.settings.radius | escape }}px;
+    --vr-side-scale: {{ block.settings.side_scale | divided_by: 100.0 | escape }};
+    --vr-accent: {{ block.settings.accent | escape }};
+    {%- if block.settings.heading_color != blank %} --vr-heading: {{ block.settings.heading_color | escape }};{% endif %}
+    {%- if block.settings.text_color != blank %} --vr-text: {{ block.settings.text_color | escape }};{% endif %}
+    {%- if block.settings.style == 'custom' and block.settings.background != blank %} --vr-bg: {{ block.settings.background | escape }};{% endif %}
+    --vr-pad: {{ block.settings.padding | escape }}px;
   "
 >
   <div class="vr__inner">
@@ -51,10 +51,10 @@
           <span class="vr__eyebrow-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" width="14" height="14"><rect x="3" y="3" width="18" height="18" rx="5" fill="none" stroke="currentColor" stroke-width="2.2"/><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="2.2"/><circle cx="17.4" cy="6.6" r="1.3" fill="currentColor"/></svg>
           </span>
-          {{ block.settings.eyebrow }}
+          {{ block.settings.eyebrow | escape }}
         </p>
       {%- endif -%}
-      {%- if block.settings.heading != blank -%}<h2 class="vr__title">{{ block.settings.heading }}</h2>{%- endif -%}
+      {%- if block.settings.heading != blank -%}<h2 class="vr__title">{{ block.settings.heading | escape }}</h2>{%- endif -%}
       {%- if block.settings.subheading != blank -%}<div class="vr__sub">{{ block.settings.subheading }}</div>{%- endif -%}
     </div>
 
@@ -67,9 +67,9 @@
             <div class="vr__frame">
               <video
                 class="vr__video"
-                src="{{ r.v }}"
-                {% if r.p != blank %}poster="{{ r.p }}"{% endif %}
-                {% if r.f != blank %}data-fallback="{{ r.f }}"{% endif %}
+                src="{{ r.v | escape }}"
+                {% if r.p != blank %}poster="{{ r.p | escape }}"{% endif %}
+                {% if r.f != blank %}data-fallback="{{ r.f | escape }}"{% endif %}
                 muted
                 playsinline
                 preload="{% if n < 2 %}auto{% else %}none{% endif %}"
@@ -111,7 +111,7 @@
                   <svg class="i-sound" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
                 </button>
                 {%- if block.settings.show_link and r.l != blank -%}
-                  <a class="vr__ctrl vr__ig" href="{{ r.l }}" target="_blank" rel="noopener" aria-label="{{ 'reels.view_on_instagram' | t }}">
+                  <a class="vr__ctrl vr__ig" href="{{ r.l | escape }}" target="_blank" rel="noopener" aria-label="{{ 'reels.view_on_instagram' | t }}">
                     <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="17.4" cy="6.6" r="1.2" fill="currentColor"/></svg>
                   </a>
                 {%- endif -%}
@@ -146,9 +146,9 @@
 
       {%- if block.settings.button_label != blank and follow_link != blank -%}
         <div class="vr__cta">
-          <a class="vr__button" href="{{ follow_link }}" target="_blank" rel="noopener">
+          <a class="vr__button" href="{{ follow_link | escape }}" target="_blank" rel="noopener">
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="17.4" cy="6.6" r="1.2" fill="currentColor"/></svg>
-            <span>{{ block.settings.button_label }}{% if handle != blank and block.settings.show_handle %} <strong>@{{ handle }}</strong>{% endif %}</span>
+            <span>{{ block.settings.button_label | escape }}{% if handle != blank and block.settings.show_handle %} <strong>@{{ handle | escape }}</strong>{% endif %}</span>
           </a>
         </div>
       {%- endif -%}
