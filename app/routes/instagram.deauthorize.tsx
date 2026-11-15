@@ -3,7 +3,10 @@ import db from "../db.server";
 import { parseSignedRequest } from "../lib/signed-request.server";
 import { removeInstagramReels } from "../lib/reels.server";
 
-/** Meta calls this when someone removes ReelStage from their Facebook or Instagram account. */
+/** Meta calls this when someone removes ReelStage from their Facebook or Instagram account.
+ * Security note: called by Meta, not Shopify, so there is no Shopify session. The request is authenticated by
+ * verifying Meta's signed_request (HMAC-SHA256 with the app secret) in parseSignedRequest; anything unsigned is rejected.
+ */
 export const action = async ({ request }: ActionFunctionArgs) => {
   const form = await request.formData();
   const data = parseSignedRequest(String(form.get("signed_request") || ""));

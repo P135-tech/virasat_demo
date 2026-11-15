@@ -6,6 +6,8 @@ import { removeInstagramReels } from "../lib/reels.server";
 
 /**
  * Meta calls this when an Instagram user asks for their data to be deleted.
+ * Security note: called by Meta, not Shopify, so there is no Shopify session. The request is authenticated by
+ * verifying Meta's signed_request (HMAC-SHA256 with the app secret) in parseSignedRequest; anything unsigned is rejected.
  * We delete the saved login and account details at once and reply with a status link + code (Meta's required format).
  */
 export const action = async ({ request }: ActionFunctionArgs) => {

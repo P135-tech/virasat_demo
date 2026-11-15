@@ -6,13 +6,20 @@ import { getReel } from "../lib/instagram.server";
  * Public address for reels played straight from Instagram (when Shopify Files won't take the video).
  * Instagram's own video addresses expire, so this looks up the current one and sends the browser there.
  * Only reels a store has chosen are served. ?poster=1 gives the preview image instead of the video.
+ *
+ * Security note: this route is public on purpose. Shoppers' browsers load it from the storefront, where there is
+ * no Shopify session. It never reads or changes store data; it only redirects to a public Instagram media link,
+ * and only for reels the merchant chose (checked against the database). Inputs are validated below.
  */
+const SHOP = /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/;
+const MEDIA = /^\d{5,25}$/;
 const cache = new Map<string, { video: string | null; poster: string | null; until: number }>();
 
 export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   const shop = params.shop || "";
   const mediaId = params.mediaId || "";
   const wantPoster = new URL(request.url).searchParams.has("poster");
+  if (!SHOP.test(shop) || !MEDIA.test(mediaId)) return new Response("Not found", { status: 404 });
   const key = `${shop}/${mediaId}`;
 
   let hit = cache.get(key);
