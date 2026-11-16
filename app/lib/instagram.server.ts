@@ -239,6 +239,49 @@ export async function listReels(shop: string, max = 60): Promise<Reel[]> {
     .slice(0, max);
 }
 
+/** The short code in an Instagram reel/post link, e.g. instagram.com/reel/C9abc123/ → "C9abc123". */
+export function shortcodeFrom(link: string): string | null {
+  const m = String(link || "")
+    .trim()
+    .match(/instagram\.com\/(?:[A-Za-z0-9._]+\/)?(?:reels?|p|tv)\/([A-Za-z0-9_-]{5,})/i);
+  return m ? m[1] : null;
+}
+
+/**
+ * Finds a reel in the store's connected Instagram account from its link (searches the last ~500 posts).
+ * Only the merchant's own reels can be found: Meta doesn't allow reading other accounts' videos.
+ */
+export async function findReelByLink(shop: string, link: string): Promise<Reel> {
+  const code = shortcodeFrom(link);
+  if (!code) throw new Error("That doesn't look like an Instagram reel link. In Instagram, open the reel → ⋯ or Share → Copy link.");
+  const acc = await db.instagramAccount.findUnique({ where: { shop } });
+  if (!acc) throw new Error("Instagram is not connected.");
+  const first = new URL(`${GRAPH}/${acc.igUserId}/media`);
+  first.searchParams.set("fields", FIELDS);
+  first.searchParams.set("limit", "50");
+  first.searchParams.set("access_token", decrypt(acc.accessToken));
+  let next: string | null = first.toString();
+  let pages = 0;
+  try {
+    while (next && pages < 10) {
+      pages++;
+      const page: { data: MediaNode[]; paging?: { next?: string } } = await fbJson(await fetch(next));
+      for (const m of page.data || []) {
+        if (m.permalink && shortcodeFrom(m.permalink) === code) {
+          if (!isReel(m)) throw new Error("That link is a photo post, not a reel. Only videos and reels can be added.");
+          return toReel(m);
+        }
+      }
+      next = page.paging?.next ?? null;
+    }
+  } catch (e) {
+    throw friendly(e);
+  }
+  throw new Error(
+    `This reel isn't on @${acc.username} (or it's older than your last 500 posts). You can only add reels from your connected Instagram account.`,
+  );
+}
+
 /** One reel with a fresh video address (Instagram's addresses expire after a while). */
 export async function getReel(shop: string, mediaId: string): Promise<Reel> {
   const token = await tokenFor(shop);

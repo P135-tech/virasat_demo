@@ -20,6 +20,10 @@ export default function Help() {
           Instagram, and ReelStage keeps their links up to date. If you prefer, choose “Copy to Shopify Files” on the Reels page
           to keep a copy of each reel in your store’s Files (Content → Files).
         </s-paragraph>
+        <s-paragraph>
+          Want an older reel that isn’t in the list? In Instagram, open the reel → ⋯ or Share → Copy link, then paste it under
+          “Add a reel by link”. Only reels from your connected Instagram account can be added.
+        </s-paragraph>
       </s-section>
       <s-section heading="2. Add the block to a page">
         <s-stack gap="base">

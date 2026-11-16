@@ -5,7 +5,7 @@ import { useAppBridge } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
-import { authorizeUrl, disconnect, listReels, type Reel } from "../lib/instagram.server";
+import { authorizeUrl, disconnect, findReelByLink, listReels, type Reel } from "../lib/instagram.server";
 import { forgetOldInstall, removeInstagramReels, setLayout, setStorage, storageFor, publishToStore, processPending, refreshInstagramLinks, refreshStatuses, resumeIfStuck, saveSelection, type Admin } from "../lib/reels.server";
 import { LIST_COUNT, MAX_REELS } from "../lib/constants";
 import { themeSupportsAppBlocks } from "../lib/theme.server";
@@ -112,6 +112,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             : "Saved. Your reels are now on your store.",
       };
     }
+    if (intent === "addLink") {
+      const reel = await findReelByLink(shop, String(fd.get("link") || ""));
+      const rows = await db.selectedReel.findMany({ where: { shop }, orderBy: { position: "asc" } });
+      if (rows.some((r) => r.mediaId === reel.id)) return { ok: true, added: true, message: "That reel is already on your store." };
+      if (rows.length >= MAX_REELS) return { ok: false, message: `You can show up to ${MAX_REELS} reels. Remove one first.` };
+      await saveSelection(a, shop, [
+        ...rows.map((r) => ({ id: r.mediaId, caption: r.caption, permalink: r.permalink, thumbnail: null })),
+        { id: reel.id, caption: reel.caption, permalink: reel.permalink, thumbnail: reel.thumbnail },
+      ]);
+      return {
+        ok: true,
+        added: true,
+        message: (await storageFor(shop)) === "files" ? "Reel added. It's being copied to your store." : "Reel added to your store.",
+      };
+    }
     if (intent === "move" || intent === "remove") {
       const mediaId = String(fd.get("mediaId"));
       const rows = await db.selectedReel.findMany({ where: { shop }, orderBy: { position: "asc" } });
@@ -179,8 +194,10 @@ export default function Reels() {
   useEffect(() => setChosen(savedIds), [savedIds]);
   const dirty = chosen.join(",") !== savedIds.join(",");
 
+  const [link, setLink] = useState("");
   useEffect(() => {
     if (result?.message) shopify.toast.show(result.message, { isError: !result.ok });
+    if (result && "added" in result && result.added) setLink("");
   }, [result, shopify]);
   useEffect(() => {
     if (d.justConnected) shopify.toast.show("Instagram connected");
@@ -396,6 +413,31 @@ export default function Reels() {
             </s-link>{" "}
             → the “ReelStage reels” block is added to your home page → Save.
           </s-paragraph>
+        </s-stack>
+      </s-section>
+
+      <s-section heading="Add a reel by link">
+        <s-stack gap="base">
+          <s-paragraph>
+            Want an older reel? In Instagram, open the reel → ⋯ or Share → Copy link, and paste it here. It must be a reel
+            from @{d.account.username}.
+          </s-paragraph>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            <input
+              aria-label="Instagram reel link"
+              placeholder="https://www.instagram.com/reel/…"
+              value={link}
+              onChange={(e) => setLink(e.currentTarget.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && link.trim() && !busy && !dirty) post({ intent: "addLink", link: link.trim() });
+              }}
+              style={{ flex: "1 1 280px", minWidth: 0, padding: "8px 10px", border: "1px solid #8a8a8a", borderRadius: 8, fontSize: 14 }}
+            />
+            <s-button variant="primary" disabled={!link.trim() || busy || dirty} onClick={() => post({ intent: "addLink", link: link.trim() })}>
+              Add to store
+            </s-button>
+          </div>
+          {dirty && <s-text color="subdued">Save your ticked reels first, then add by link.</s-text>}
         </s-stack>
       </s-section>
 
